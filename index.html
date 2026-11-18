@@ -68,6 +68,15 @@
     <button class="sample" type="button" data-voice="elena" data-label="Elena">▶ Elena</button>
   </div>
 
+  <div class="card" id="samples-lv" style="margin-top:16px">
+    <h2 style="font-size:17px;margin:0 0 6px">Latviešu balsis — salīdzinājums</h2>
+    <p class="sub" style="margin:0 0 4px">Все голоса читают один и тот же латышский текст (~25 с): услуги, Volkswagen Passat, дата, время и телефон. Скорость и громкость одинаковые (1.0). Агенты-образцы не умеют записывать и не видят календарь, образцы не записываются. PIN — из поля выше; каждый образец — 1 звонок из суточного лимита. Рабочий LV-агент пока говорит голосом Anna.</p>
+    <button class="sample" type="button" data-voice="lv_anna" data-label="Anna (сейчас, ElevenLabs v3)">▶ Anna — текущий (ElevenLabs v3)</button>
+    <button class="sample" type="button" data-voice="lv_seva" data-label="Seva (ElevenLabs v3)">▶ Seva — мужской, латыш (ElevenLabs v3)</button>
+    <button class="sample" type="button" data-voice="lv_marin" data-label="Marin (OpenAI)">▶ Marin — женский (OpenAI)</button>
+    <button class="sample" type="button" data-voice="lv_grace" data-label="Grace (Fish Audio)">▶ Grace — женский (Fish Audio)</button>
+  </div>
+
   <p class="note">Для тестов называйте вымышленные данные: имя начинается с «TEST», телефон 2600000x. Образцы голосов — только русские.<br>Номер звонка для разбора: <code id="callid">—</code></p>
 </main>
 
@@ -121,6 +130,7 @@
     active = inCall;
     $('form').style.display = inCall ? 'none' : '';
     $('samples').style.display = inCall ? 'none' : '';
+    $('samples-lv').style.display = inCall ? 'none' : '';
     document.querySelectorAll('button.sample').forEach((b) => { b.disabled = false; });
     $('hang').style.display = inCall ? 'block' : 'none';
     $('timer').style.display = inCall ? 'block' : 'none';
