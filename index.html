@@ -27,6 +27,9 @@
   .timer { font-variant-numeric:tabular-nums; font-size:44px; text-align:center; margin:10px 0 0; display:none; }
   .meter { height:8px; border-radius:4px; background:#0b1428; overflow:hidden; margin-top:10px; display:none; }
   .meter > div { height:100%; width:0; background:var(--ok); transition:width .1s; }
+  .rec { margin:14px 0 4px; padding:12px; border-radius:12px; background:#3a1d1d; border:1px solid #7f1d1d; color:#fecaca; font-size:14px; }
+  #micwarn { display:none; margin-top:12px; padding:12px; border-radius:12px; background:#3b2f0b; border:1px solid #a16207; color:#fde68a; font-size:14px; }
+  .lbl { font-size:12px; color:var(--muted); margin-top:10px; }
   .note { color:var(--muted); font-size:13px; margin-top:18px; }
   code { color:var(--muted); font-size:12px; word-break:break-all; }
 </style>
@@ -34,18 +37,22 @@
 <body>
 <main>
   <h1>AutoReception RU — голосовой тест</h1>
-  <p class="sub">Звонок агенту из браузера. Не дольше 5 минут, не больше 10 звонков в сутки.</p>
+  <p class="sub">Звонок агенту из браузера. Не дольше 5 минут, не больше 10 звонков в сутки. Разговор записывается (хранение до 7 дней).</p>
 
   <div class="card">
     <form id="form" autocomplete="off">
       <label for="pin">PIN (10 цифр)</label>
       <input id="pin" type="password" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" required>
       <div class="row"><input id="remember" type="checkbox"><label for="remember" style="margin:0">Запомнить PIN на этом телефоне</label></div>
+      <div class="rec"><strong>Разговор записывается.</strong> Аудио и расшифровка сохраняются в Retell для разбора ошибок и удаляются не позже чем через 7 дней. Называйте только вымышленные данные.</div>
+      <div class="row"><input id="consent" type="checkbox"><label for="consent" style="margin:0">Понимаю и согласен на запись этого тестового разговора</label></div>
       <button id="call" type="submit">Позвонить</button>
     </form>
     <button id="hang" type="button">Завершить звонок</button>
     <div class="timer" id="timer">5:00</div>
+    <div class="lbl" id="lblmic" style="display:none">Ваш микрофон</div>
     <div class="meter" id="meter"><div></div></div>
+    <div id="micwarn">Микрофон не передаёт звук уже 10 секунд. Проверьте, что микрофон разрешён, не выключен и экран не заблокирован.</div>
     <div id="status"></div>
   </div>
 
@@ -60,6 +67,35 @@
   const $ = (id) => document.getElementById(id);
   const statusEl = $('status');
   let client = null, timerId = null, endsAt = 0, active = false;
+  // Контроль микрофона: берём тот же поток, что открыл SDK (второй getUserMedia на iOS глушит первый).
+  let micStream = null, micCtx = null, micTimer = null, silentSince = 0;
+  const origGUM = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
+  if (origGUM) navigator.mediaDevices.getUserMedia = async (c) => { const st = await origGUM(c); if (c && c.audio) micStream = st; return st; };
+  function startMicMonitor() {
+    if (!micStream || micCtx) return;
+    try {
+      micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const an = micCtx.createAnalyser(); an.fftSize = 1024;
+      micCtx.createMediaStreamSource(micStream).connect(an);
+      const buf = new Float32Array(an.fftSize);
+      silentSince = Date.now();
+      micStream.getAudioTracks().forEach((t) => { t.onended = () => showMicWarn(true); t.onmute = () => showMicWarn(true); });
+      micTimer = setInterval(() => {
+        an.getFloatTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const rms = Math.sqrt(sum / buf.length);
+        $('meter').firstElementChild.style.width = Math.min(100, rms * 600) + '%';
+        if (rms > 0.01) silentSince = Date.now();
+        showMicWarn(Date.now() - silentSince > 10000);
+      }, 200);
+    } catch (e) { console.error('mic monitor', e); }
+  }
+  function stopMicMonitor() {
+    if (micTimer) { clearInterval(micTimer); micTimer = null; }
+    try { micCtx && micCtx.close(); } catch (e) {}
+    micCtx = null; micStream = null; showMicWarn(false);
+  }
+  function showMicWarn(on) { $('micwarn').style.display = on && active ? 'block' : 'none'; }
 
   const store = {
     get() { try { return localStorage.getItem('ar_voice_pin') || ''; } catch (e) { return ''; } },
@@ -75,6 +111,7 @@
     $('hang').style.display = inCall ? 'block' : 'none';
     $('timer').style.display = inCall ? 'block' : 'none';
     $('meter').style.display = inCall ? 'block' : 'none';
+    $('lblmic').style.display = inCall ? 'block' : 'none';
     $('call').disabled = false;
   }
   function tick() {
@@ -85,6 +122,7 @@
   function hangUp(msg) {
     if (timerId) { clearInterval(timerId); timerId = null; }
     try { client && client.stopCall(); } catch (e) {}
+    stopMicMonitor();
     ui(false);
     if (msg) setStatus(msg, '');
   }
@@ -103,6 +141,7 @@
     if (active) return;
     const pin = $('pin').value.trim();
     if (!/^\d{10}$/.test(pin)) { setStatus('PIN — ровно 10 цифр.', 'bad'); return; }
+    if (!$('consent').checked) { setStatus('Подтвердите согласие на запись разговора.', 'bad'); return; }
     store.set($('remember').checked ? pin : '');
     $('call').disabled = true;
     setStatus('Проверяю доступ…');
@@ -124,19 +163,14 @@
       const mod = await import(SDK);
       const RetellWebClient = mod.RetellWebClient || (mod.default && mod.default.RetellWebClient);
       client = new RetellWebClient();
-      client.on('call_started', () => setStatus('Разговор идёт. Говорите.', 'ok'));
+      client.on('call_started', () => { setStatus('Разговор идёт. Говорите.', 'ok'); startMicMonitor(); });
       client.on('call_ended', () => hangUp('Звонок завершён.'));
       client.on('error', (e) => { console.error(e); hangUp('Ошибка звонка: ' + (e && e.message ? e.message : e)); });
-      client.on('audio', (a) => {
-        if (!a || !a.length) return;
-        let s = 0; for (let i = 0; i < a.length; i += 8) s += Math.abs(a[i]);
-        $('meter').firstElementChild.style.width = Math.min(100, (s / (a.length / 8)) * 400) + '%';
-      });
       $('callid').textContent = data.call_id;
       ui(true);
       endsAt = Date.now() + Math.min(MAX_SECONDS, data.max_seconds || MAX_SECONDS) * 1000;
       timerId = setInterval(tick, 500); tick();
-      await client.startCall({ accessToken: data.access_token, callId: data.call_id, transport: data.transport, iceServers: data.ice_servers, emitRawAudioSamples: true });
+      await client.startCall({ accessToken: data.access_token, callId: data.call_id, transport: data.transport, iceServers: data.ice_servers });
     } catch (e) {
       console.error(e);
       const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
