@@ -37,15 +37,18 @@
 </head>
 <body>
 <main>
-  <h1>AutoReception RU — голосовой тест</h1>
-  <p class="sub">Звонок агенту из браузера. Не дольше 5 минут, не больше 10 звонков в сутки. Разговор записывается (хранение до 7 дней).</p>
+  <h1>AutoReception — голосовой тест</h1>
+  <p class="sub">Звонок агенту из браузера. Не дольше 5 минут, не больше 10 звонков в сутки. Разговор записывается только с вашего согласия.</p>
 
   <div class="card">
     <form id="form" autocomplete="off">
       <label for="pin">PIN (10 цифр)</label>
       <input id="pin" type="password" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" required>
       <div class="row"><input id="remember" type="checkbox"><label for="remember" style="margin:0">Запомнить PIN на этом телефоне</label></div>
-      <div class="rec"><strong>Разговор записывается.</strong> Аудио и расшифровка сохраняются в Retell для разбора ошибок и удаляются не позже чем через 7 дней. Называйте только вымышленные данные.</div>
+      <label style="margin-top:14px">Язык разговора</label>
+      <div class="row"><input id="lang_ru" type="radio" name="lang" value="ru" checked><label for="lang_ru" style="margin:0">Русский (AutoReception RU, голос Kate)</label></div>
+      <div class="row"><input id="lang_lv" type="radio" name="lang" value="lv"><label for="lang_lv" style="margin:0">Latviešu (AutoReception LV, balss Anna)</label></div>
+      <div class="rec"><strong>Разговор записывается.</strong> Аудио и расшифровка сохраняются в Retell для разбора ошибок. Удаление через 7 дней запрошено в настройках звонка, но фактически ещё не подтверждено — гарантировать его нельзя. Называйте только вымышленные данные.</div>
       <div class="row"><input id="consent" type="checkbox"><label for="consent" style="margin:0">Понимаю и согласен на запись этого тестового разговора</label></div>
       <button id="call" type="submit">Позвонить</button>
     </form>
@@ -65,7 +68,7 @@
     <button class="sample" type="button" data-voice="elena" data-label="Elena">▶ Elena</button>
   </div>
 
-  <p class="note">Для тестов называйте вымышленные данные: имя начинается с «TEST», телефон 2600000x.<br>Номер звонка для разбора: <code id="callid">—</code></p>
+  <p class="note">Для тестов называйте вымышленные данные: имя начинается с «TEST», телефон 2600000x. Образцы голосов — только русские.<br>Номер звонка для разбора: <code id="callid">—</code></p>
 </main>
 
 <script type="module">
@@ -146,6 +149,7 @@
     UNAVAILABLE: () => 'Сервер временно недоступен.',
     CALL_CREATE_FAILED: () => 'Retell не создал звонок. Попробуйте позже.',
     BAD_VOICE: () => 'Неизвестный голос.',
+    BAD_LANG: () => 'Неизвестный язык.',
   };
 
   function setBusy(on) {
@@ -153,7 +157,7 @@
     document.querySelectorAll('button.sample').forEach((b) => { b.disabled = on; });
   }
 
-  // mode: 'call' — обычный разговор с агентом RU; 'sample' — образец голоса (отдельный агент без функций).
+  // mode: 'call' — разговор с агентом выбранного языка (агента выбирает сервер по lang=ru|lv); 'sample' — образец голоса (отдельный агент без функций).
   async function begin(mode, voice, label) {
     if (active) return;
     const pin = $('pin').value.trim();
@@ -164,7 +168,9 @@
     setStatus('Проверяю доступ…');
     let data;
     try {
-      const params = mode === 'sample' ? { pin, mode: 'sample', voice } : { pin };
+      const langEl = document.querySelector('input[name=lang]:checked');
+      const lang = langEl && langEl.value === 'lv' ? 'lv' : 'ru';
+      const params = mode === 'sample' ? { pin, mode: 'sample', voice } : { pin, lang };
       const res = await fetch(API, { method: 'POST', body: new URLSearchParams(params), cache: 'no-store', credentials: 'omit' });
       data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
@@ -181,7 +187,7 @@
       const mod = await import(SDK);
       const RetellWebClient = mod.RetellWebClient || (mod.default && mod.default.RetellWebClient);
       client = new RetellWebClient();
-      client.on('call_started', () => { setStatus(mode === 'sample' ? 'Образец: ' + label + '. Слушайте.' : 'Разговор идёт. Говорите.', 'ok'); startMicMonitor(); });
+      client.on('call_started', () => { setStatus(mode === 'sample' ? 'Образец: ' + label + '. Слушайте.' : (data.lang === 'lv' ? 'Saruna notiek (LV). Runājiet.' : 'Разговор идёт. Говорите.'), 'ok'); startMicMonitor(); });
       client.on('call_ended', () => hangUp('Звонок завершён.'));
       client.on('error', (e) => { console.error(e); hangUp('Ошибка звонка: ' + (e && e.message ? e.message : e)); });
       $('callid').textContent = data.call_id;
