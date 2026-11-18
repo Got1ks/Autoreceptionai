@@ -22,6 +22,7 @@
   button:disabled { opacity:.45; }
   #call { background:var(--accent); }
   #hang { background:var(--bad); display:none; }
+  button.sample { background:#334155; font-size:17px; padding:14px; margin-top:10px; }
   #status { margin-top:18px; min-height:24px; font-size:16px; }
   #status.ok { color:var(--ok); } #status.bad { color:#fca5a5; }
   .timer { font-variant-numeric:tabular-nums; font-size:44px; text-align:center; margin:10px 0 0; display:none; }
@@ -54,6 +55,14 @@
     <div class="meter" id="meter"><div></div></div>
     <div id="micwarn">Микрофон не передаёт звук уже 10 секунд. Проверьте, что микрофон разрешён, не выключен и экран не заблокирован.</div>
     <div id="status"></div>
+  </div>
+
+  <div class="card" id="samples" style="margin-top:16px">
+    <h2 style="font-size:17px;margin:0 0 6px">Сравнение голосов</h2>
+    <p class="sub" style="margin:0 0 4px">Каждый голос читает один и тот же текст про автосервис (~25 с, скорость 0.9) и сам завершает звонок. Агент-образец не умеет записывать и не видит календарь. Образцы не записываются. PIN — из поля выше; каждый образец — 1 звонок из суточного лимита.</p>
+    <button class="sample" type="button" data-voice="marusya" data-label="Marusya G">▶ Marusya G</button>
+    <button class="sample" type="button" data-voice="kate" data-label="Kate">▶ Kate</button>
+    <button class="sample" type="button" data-voice="elena" data-label="Elena">▶ Elena</button>
   </div>
 
   <p class="note">Для тестов называйте вымышленные данные: имя начинается с «TEST», телефон 2600000x.<br>Номер звонка для разбора: <code id="callid">—</code></p>
@@ -108,6 +117,8 @@
   function ui(inCall) {
     active = inCall;
     $('form').style.display = inCall ? 'none' : '';
+    $('samples').style.display = inCall ? 'none' : '';
+    document.querySelectorAll('button.sample').forEach((b) => { b.disabled = false; });
     $('hang').style.display = inCall ? 'block' : 'none';
     $('timer').style.display = inCall ? 'block' : 'none';
     $('meter').style.display = inCall ? 'block' : 'none';
@@ -117,7 +128,7 @@
   function tick() {
     const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
     $('timer').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
-    if (left <= 0) hangUp('Время теста (5 минут) вышло.');
+    if (left <= 0) hangUp('Время звонка вышло.');
   }
   function hangUp(msg) {
     if (timerId) { clearInterval(timerId); timerId = null; }
@@ -134,36 +145,43 @@
     FORBIDDEN: () => 'Запрос отклонён сервером (адрес страницы не разрешён).',
     UNAVAILABLE: () => 'Сервер временно недоступен.',
     CALL_CREATE_FAILED: () => 'Retell не создал звонок. Попробуйте позже.',
+    BAD_VOICE: () => 'Неизвестный голос.',
   };
 
-  $('form').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
+  function setBusy(on) {
+    $('call').disabled = on;
+    document.querySelectorAll('button.sample').forEach((b) => { b.disabled = on; });
+  }
+
+  // mode: 'call' — обычный разговор с агентом RU; 'sample' — образец голоса (отдельный агент без функций).
+  async function begin(mode, voice, label) {
     if (active) return;
     const pin = $('pin').value.trim();
     if (!/^\d{10}$/.test(pin)) { setStatus('PIN — ровно 10 цифр.', 'bad'); return; }
-    if (!$('consent').checked) { setStatus('Подтвердите согласие на запись разговора.', 'bad'); return; }
+    if (mode === 'call' && !$('consent').checked) { setStatus('Подтвердите согласие на запись разговора.', 'bad'); return; }
     store.set($('remember').checked ? pin : '');
-    $('call').disabled = true;
+    setBusy(true);
     setStatus('Проверяю доступ…');
     let data;
     try {
-      const res = await fetch(API, { method: 'POST', body: new URLSearchParams({ pin }), cache: 'no-store', credentials: 'omit' });
+      const params = mode === 'sample' ? { pin, mode: 'sample', voice } : { pin };
+      const res = await fetch(API, { method: 'POST', body: new URLSearchParams(params), cache: 'no-store', credentials: 'omit' });
       data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         const f = ERRORS[data.error];
         setStatus(f ? f(data) : 'Ошибка сервера (' + res.status + ').', 'bad');
-        $('call').disabled = false;
+        setBusy(false);
         return;
       }
     } catch (e) {
-      setStatus('Нет связи с сервером.', 'bad'); $('call').disabled = false; return;
+      setStatus('Нет связи с сервером.', 'bad'); setBusy(false); return;
     }
     try {
       setStatus('Подключаю микрофон…');
       const mod = await import(SDK);
       const RetellWebClient = mod.RetellWebClient || (mod.default && mod.default.RetellWebClient);
       client = new RetellWebClient();
-      client.on('call_started', () => { setStatus('Разговор идёт. Говорите.', 'ok'); startMicMonitor(); });
+      client.on('call_started', () => { setStatus(mode === 'sample' ? 'Образец: ' + label + '. Слушайте.' : 'Разговор идёт. Говорите.', 'ok'); startMicMonitor(); });
       client.on('call_ended', () => hangUp('Звонок завершён.'));
       client.on('error', (e) => { console.error(e); hangUp('Ошибка звонка: ' + (e && e.message ? e.message : e)); });
       $('callid').textContent = data.call_id;
@@ -177,7 +195,10 @@
       hangUp(denied ? 'Нет доступа к микрофону. Разрешите микрофон для этой страницы.' : 'Не удалось начать звонок: ' + (e && e.message ? e.message : e));
       statusEl.className = 'bad';
     }
-  });
+  }
+
+  $('form').addEventListener('submit', (ev) => { ev.preventDefault(); begin('call'); });
+  document.querySelectorAll('button.sample').forEach((b) => b.addEventListener('click', () => begin('sample', b.dataset.voice, b.dataset.label)));
   $('hang').addEventListener('click', () => hangUp('Звонок завершён.'));
 </script>
 </body>
