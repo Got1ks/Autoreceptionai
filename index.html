@@ -47,7 +47,8 @@
       <div class="row"><input id="remember" type="checkbox"><label for="remember" style="margin:0">Запомнить PIN на этом телефоне</label></div>
       <label style="margin-top:14px">Язык разговора</label>
       <div class="row"><input id="lang_ru" type="radio" name="lang" value="ru" checked><label for="lang_ru" style="margin:0">Русский (AutoReception RU, голос Kate)</label></div>
-      <div class="row"><input id="lang_lv" type="radio" name="lang" value="lv"><label for="lang_lv" style="margin:0">Latviešu (AutoReception LV, balss Anna)</label></div>
+      <div class="row"><input id="lang_lv" type="radio" name="lang" value="lv"><label for="lang_lv" style="margin:0">Latviešu (AutoReception LV, balss Seva)</label></div>
+      <div class="row"><input id="lang_route" type="radio" name="lang" value="route_test"><label for="lang_route" style="margin:0">Тест маршрутизатора языка: выбор ГОЛОСОМ («latviski» / «krieviski»). Проверяет передачу агенту, не кнопки телефона</label></div>
       <div class="rec"><strong>Разговор записывается.</strong> Аудио и расшифровка сохраняются в Retell для разбора ошибок. Удаление через 7 дней запрошено в настройках звонка, но фактически ещё не подтверждено — гарантировать его нельзя. Называйте только вымышленные данные.</div>
       <div class="row"><input id="consent" type="checkbox"><label for="consent" style="margin:0">Понимаю и согласен на запись этого тестового разговора</label></div>
       <button id="call" type="submit">Позвонить</button>
@@ -179,7 +180,7 @@
     let data;
     try {
       const langEl = document.querySelector('input[name=lang]:checked');
-      const lang = langEl && langEl.value === 'lv' ? 'lv' : 'ru';
+      const lang = langEl && (langEl.value === 'lv' || langEl.value === 'route_test') ? langEl.value : 'ru';
       const params = mode === 'sample' ? { pin, mode: 'sample', voice } : { pin, lang };
       const res = await fetch(API, { method: 'POST', body: new URLSearchParams(params), cache: 'no-store', credentials: 'omit' });
       data = await res.json().catch(() => ({}));
