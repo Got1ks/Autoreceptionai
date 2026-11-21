@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Ii45Mrv+EcU6uJIICzmxbitcFJWAkKodPvFfSgovTcQ=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UAzc7ec//G+3Fw49qR2aXJTKnV7AqWg0R2PPcxW6kgs=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="robots" content="noindex,nofollow">
 <title>Панель автосервиса</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -143,10 +143,26 @@ let tab = 'schedule', view = 'day', cur = tzToday();
 const weeks = {};       // кэш: начало недели -> { at, data | error }
 let reqs = null;         // { at, data | error }
 const FRESH = 5 * 60 * 1000;
+// Поколение сессии: меняется при входе, выходе, истечении и отказе. Ответ, пришедший после смены
+// поколения, отбрасывается — данные прошлой сессии не попадут на экран и в кэш.
+let gen = 0;
+const inflight = {};     // ключ -> { gen, p } — один запрос на неделю/журнал одновременно
+const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isTime = (s) => typeof s === 'string' && /^\d{2}:\d{2}$/.test(s);
+function clearSession() {
+  gen++;
+  token = null; tokenExp = 0; me = null;
+  for (const k in weeks) delete weeks[k];
+  for (const k in inflight) delete inflight[k];
+  reqs = null;
+  $('#main').innerHTML = ''; $('#hdr').innerHTML = '';
+  const bd = $('#rqb'); if (bd) { bd.hidden = true; bd.textContent = ''; }
+}
 
 function b64json(part) { try { return JSON.parse(decodeURIComponent(escape(atob(part.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; } }
 
 async function api(body) {
+  const g = gen;
   if (!token || Date.now() / 1000 > tokenExp - 30) { expire(); throw { code: 'TOKEN_EXPIRED' }; }
   // Токен — в теле POST, не в адресе. Сначала text/plain (без предварительного CORS-запроса);
   // если сервер не разобрал тело (NO_TOKEN при отправленном токене) или браузер отказал — один повтор как JSON.
@@ -159,6 +175,7 @@ async function api(body) {
     if (ct === 'application/json') bodyType = 'json';
     break;
   }
+  if (g !== gen) throw { code: 'STALE' }; // сессия сменилась, пока шёл запрос
   if (!res) throw { code: 'NETWORK' };
   if (!data) throw { code: 'BAD_RESPONSE', http: res.status };
   if (!res.ok || !data || data.ok === false) {
@@ -187,12 +204,16 @@ function onCredential(resp) {
   const t = resp && resp.credential;
   const p = t ? b64json(t.split('.')[1] || '') : null; // только для отображения; проверяет сервер
   if (!t || !p) { $('#lmsg').innerHTML = '<div class="note bad">Google не вернул данные входа.</div>'; return; }
-  token = t; tokenExp = Number(p.exp) || 0; me = { email: p.email || '', name: p.name || '' };
+  clearSession(); // новый вход — всегда с чистым кэшем, даже если аккаунт тот же
+  token = t; tokenExp = Number(p.exp) || 0; me = { email: String(p.email || ''), name: String(p.name || '') };
+  const g = gen;
   $('#lmsg').innerHTML = '<p class="mut">Проверяю доступ…</p>';
   loadWeek(weekStart(cur), true).then((w) => {
+    if (g !== gen) return;
     const e = w && w.error;
     // Не удалось связаться или проверить вход — остаёмся на экране входа. Календарь недоступен — вход подтверждён, открываем.
     if (e && (['NETWORK', 'BAD_RESPONSE', 'AUTH_CHECK_UNAVAILABLE', 'AUTH_NOT_CONFIGURED'].includes(e.code) || /^HTTP_/.test(e.code))) {
+      clearSession(); // токен не держим, пока панель закрыта; для «Повторить» он остаётся только в этом замыкании
       $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div><button class="btn" id="retry">Повторить</button>';
       $('#retry').onclick = () => onCredential({ credential: t });
       return;
@@ -201,11 +222,12 @@ function onCredential(resp) {
     loadRequests(true);
     render();
   }, (e) => {
-    if (e.code !== 'NOT_ALLOWED') { $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div>'; token = null; }
+    if (g !== gen || e.code === 'STALE') return;
+    if (e.code !== 'NOT_ALLOWED') { clearSession(); $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div>'; }
   });
 }
 function denied(e) {
-  token = null;
+  clearSession();
   const w = e.whoami || {};
   $('#login').hidden = false;
   $('#lmsg').innerHTML = '<div class="note bad"><b>Доступ не разрешён.</b> Подпись Google подтверждена, но этого аккаунта нет в списке сотрудников.' +
@@ -213,7 +235,7 @@ function denied(e) {
   const b = $('#copysub'); if (b) b.onclick = () => { try { navigator.clipboard.writeText(w.sub).then(() => { b.textContent = 'Скопировано'; }, () => {}); } catch (x) {} };
 }
 function expire(e) {
-  token = null;
+  clearSession();
   $('#login').hidden = false;
   $('#lmsg').innerHTML = '<div class="note warn">' + (e && e.code && e.code !== 'TOKEN_EXPIRED' ? errText(e) : 'Сессия истекла. Войдите снова.') + '</div>';
   try { google.accounts.id.prompt(); } catch (x) {}
@@ -226,27 +248,48 @@ function initGoogle() {
   google.accounts.id.prompt();
 }
 
-async function loadWeek(ws, force) {
+function loadWeek(ws, force) {
   const c = weeks[ws];
-  if (!force && c && c.data && Date.now() - c.at < FRESH) return c;
+  if (!force && c && c.data && Date.now() - c.at < FRESH) return Promise.resolve(c);
+  const key = 'w:' + ws, f = inflight[key];
+  if (f && f.gen === gen) return f.p; // такой запрос уже идёт — ждём его, второй не отправляем
+  const g = gen;
   weeks[ws] = Object.assign({}, c, { loading: true });
-  try { const data = await api({ op: 'range', from: ws, to: add(ws, 6) }); weeks[ws] = { at: Date.now(), data }; }
-  catch (e) { weeks[ws] = { at: Date.now(), error: e }; if (e.code === 'NOT_ALLOWED' || e.http === 401) throw e; }
-  return weeks[ws];
+  const p = (async () => {
+    try { const data = await api({ op: 'range', from: ws, to: add(ws, 6) }); if (g === gen) weeks[ws] = { at: Date.now(), data }; }
+    catch (e) {
+      if (g !== gen || e.code === 'STALE') throw { code: 'STALE' };
+      weeks[ws] = { at: Date.now(), error: e }; // ошибка не кэшируется как свежие данные: следующий показ запросит снова
+      if (e.code === 'NOT_ALLOWED' || e.http === 401) throw e;
+    } finally { if (inflight[key] && inflight[key].p === p) delete inflight[key]; }
+    return weeks[ws];
+  })();
+  inflight[key] = { gen: g, p };
+  return p;
 }
-async function loadRequests(force) {
-  if (!force && reqs && reqs.data && Date.now() - reqs.at < FRESH) return;
-  try { reqs = { at: Date.now(), data: await api({ op: 'requests', status: 'open', limit: 100 }) }; }
-  catch (e) { reqs = { at: Date.now(), error: e }; }
-  render();
+function loadRequests(force) {
+  if (!force && reqs && reqs.data && Date.now() - reqs.at < FRESH) return Promise.resolve();
+  const f = inflight.r;
+  if (f && f.gen === gen) return f.p;
+  const g = gen;
+  const p = (async () => {
+    try { const data = await api({ op: 'requests', status: 'open', limit: 100 }); if (g === gen) reqs = { at: Date.now(), data }; }
+    catch (e) { if (g !== gen || e.code === 'STALE') return; reqs = { at: Date.now(), error: e }; }
+    finally { if (inflight.r && inflight.r.p === p) delete inflight.r; }
+    if (g === gen && token) render();
+  })();
+  inflight.r = { gen: g, p };
+  return p;
 }
+const rerender = () => { if (token) render(); };
 
 function hdr(title, sub, extra) {
-  $('#hdr').innerHTML = `<div class="grow"><h1>${title} <span class="tag ro">только чтение</span></h1>${sub ? `<small>${sub}</small>` : ''}</div>${extra || ''}`;
+  // title и sub — всегда текст (экранируются); extra — только разметка самой страницы, без данных сервера.
+  $('#hdr').innerHTML = `<div class="grow"><h1>${esc(title)} <span class="tag ro">только чтение</span></h1>${sub ? `<small>${esc(sub)}</small>` : ''}</div>${extra || ''}`;
 }
 function render() {
   document.querySelectorAll('nav button[data-tab]').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
-  const n = reqs && reqs.data ? reqs.data.count : 0; const bd = $('#rqb'); bd.hidden = !n; bd.textContent = n;
+  const n = reqs && reqs.data ? Math.max(0, Number(reqs.data.count) || 0) : 0; const bd = $('#rqb'); bd.hidden = !n; bd.textContent = String(n);
   ({ schedule: rSchedule, requests: rRequests, clients: rClients, chat: rChat, more: rMore })[tab]();
 }
 
@@ -264,43 +307,49 @@ function stTags(e) {
 }
 function jobHTML(e) {
   const ext = e.kind !== 'booking';
-  const time = e.start ? `${e.start}<small>${e.end} · ${e.duration_min} мин</small>` : 'весь<small>день</small>';
+  const time = e.start ? `${esc(e.start)}<small>${esc(e.end)} · ${esc(e.duration_min)} мин</small>` : 'весь<small>день</small>';
   const body = ext
     ? `<p><b>Занято</b>${e.title ? ' — ' + esc(e.title) : ''}</p>`
     : `<p><b>${esc(e.service_name || 'Работа')}</b></p><p>${esc(e.car)}</p><p>${esc(e.customer_name)} · <span style="white-space:nowrap">${esc(e.phone)}</span></p>${e.notes ? `<p class="mut">${esc(e.notes)}</p>` : ''}`;
   return `<div class="job ${ext ? 'ext' : 'voice'}"><div class="t">${time}</div><div>${body}<div class="tags">${srcTag(e)}${stTags(e)}</div></div></div>`;
 }
 
+let freeSeq = 0;
 function rSchedule() {
   const ws = weekStart(cur), w = weeks[ws];
   const sub = view === 'day' ? `${human(cur)} · демо-календарь проекта` : `Неделя с ${human(ws)} · демо-календарь проекта`;
   hdr(view === 'day' ? (cur === tzToday() ? 'Сегодня' : WDF[dow(cur)]) : 'Неделя', sub,
     `<div class="datenav"><button class="btn" id="prev" aria-label="Назад">‹</button><button class="btn" id="tod">Сегодня</button><button class="btn" id="next" aria-label="Вперёд">›</button></div><div class="seg"><button id="vd" aria-pressed="${view === 'day'}">День</button><button id="vw" aria-pressed="${view === 'week'}">Неделя</button></div><button class="btn" id="refresh">Обновить</button>`);
-  if (!w || w.loading && !w.data) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; if (!w) loadWeek(ws).then(render, render); return; }
-  if (w.error) { $('#main').innerHTML = `<div class="note bad">${errText(w.error)}</div>`; return; }
+  if (!w || w.loading && !w.data) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; if (!w) loadWeek(ws).then(rerender, rerender); return; }
+  if (w.error) { $('#main').innerHTML = `<div class="note bad">${errText(w.error)}</div><button class="btn" id="wretry">Попробовать ещё раз</button>`; return; }
   const d = w.data;
   let html = (d.warnings || []).includes('SHEETS_UNAVAILABLE') ? '<div class="note warn">Журнал сейчас недоступен: статусы записей не показаны. Расписание из календаря актуально.</div>' : '';
   if (view === 'day') {
     const day = (d.days || []).find((x) => x.date === cur);
     const evs = (d.events || []).filter((e) => e.date === cur);
-    html += `<p class="mut" style="margin:0 0 10px">${day && day.open ? 'Открыто ' + day.open + '–' + day.close : 'Выходной'} · записей ${evs.filter((e) => e.kind === 'booking').length}${evs.some((e) => e.kind !== 'booking') ? ' · другие события ' + evs.filter((e) => e.kind !== 'booking').length : ''}</p>`;
+    html += `<p class="mut" style="margin:0 0 10px">${day && day.open ? 'Открыто ' + esc(day.open) + '–' + esc(day.close) : 'Выходной'} · записей ${evs.filter((e) => e.kind === 'booking').length}${evs.some((e) => e.kind !== 'booking') ? ' · другие события ' + evs.filter((e) => e.kind !== 'booking').length : ''}</p>`;
     html += evs.length ? `<div class="day">${evs.map(jobHTML).join('')}</div>` : `<div class="empty"><h3>Записей нет</h3><p class="mut">${day && day.open ? 'Весь день свободен.' : 'Сервис в этот день закрыт.'}</p></div>`;
     if (day && day.open) html += `<div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Свободное время</h3><p class="small" style="margin-top:0">По тем же правилам, что у голосового ИИ: один пост, буфер 15 минут, не раньше чем через час.</p><div class="row2"><div class="fld"><label for="fsvc">Работа</label><select id="fsvc"><option value="oil_change">Замена масла</option><option value="tire_change_set">Шиномонтаж</option><option value="brake_pads">Тормозные колодки</option><option value="computer_diagnostics">Диагностика</option></select></div><div class="fld"><label>&nbsp;</label><button class="btn" id="ffind">Показать</button></div></div><div id="fres"></div></div>`;
   } else {
-    html += '<div class="week">' + (d.days || []).map((x) => {
+    html += '<div class="week">' + (d.days || []).filter((x) => x && isDate(x.date)).map((x) => {
       const evs = (d.events || []).filter((e) => e.date === x.date), b = evs.filter((e) => e.kind === 'booking').length;
-      return `<button class="wrow${x.date === tzToday() ? ' today' : ''}" data-go="${x.date}"><div><b>${WD[dow(x.date)]} ${parse(x.date).getUTCDate()}</b><span class="small">${MON[parse(x.date).getUTCMonth()].slice(0, 3)}</span></div><div class="small">${x.open ? x.open + '–' + x.close + (evs.length - b ? ' · других событий ' + (evs.length - b) : '') : 'выходной'}</div><div class="n">${b}</div></button>`;
+      return `<button class="wrow${x.date === tzToday() ? ' today' : ''}" data-go="${esc(x.date)}"><div><b>${WD[dow(x.date)]} ${parse(x.date).getUTCDate()}</b><span class="small">${MON[parse(x.date).getUTCMonth()].slice(0, 3)}</span></div><div class="small">${x.open ? esc(x.open) + '–' + esc(x.close) + (evs.length - b ? ' · других событий ' + (evs.length - b) : '') : 'выходной'}</div><div class="n">${b}</div></button>`;
     }).join('') + '</div><p class="small">Число справа — записи AutoReception за день.</p>';
   }
   html += `<p class="small">Обновлено ${new Date(w.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}. Автоматического опроса нет: «Обновить» или возврат на страницу через 5 минут.</p>`;
   $('#main').innerHTML = html;
   const ff = $('#ffind');
   if (ff) ff.onclick = async () => {
-    const out = $('#fres'); out.innerHTML = '<p class="mut">Проверяю…</p>';
+    const out = $('#fres'), my = ++freeSeq, day = cur; out.innerHTML = '<p class="mut">Проверяю…</p>'; ff.disabled = true;
+    // Показываем ответ, только если это последний запрос, тот же день и элемент ещё на экране.
+    const fresh = () => my === freeSeq && day === cur && out.isConnected;
     try {
-      const r = await api({ op: 'free', date: cur, service_id: $('#fsvc').value });
-      out.innerHTML = r.result === 'AVAILABLE' ? `<div class="chips">${(r.all_times || []).map((t) => `<span class="chip">${t}</span>`).join('')}</div>` : r.result === 'CLOSED_DAY' ? '<p>Сервис закрыт.</p>' : '<p>Свободного времени нет.</p>';
-    } catch (e) { out.innerHTML = `<div class="note bad">${errText(e)}</div>`; }
+      const r = await api({ op: 'free', date: day, service_id: $('#fsvc').value });
+      if (!fresh()) return;
+      const times = (r.all_times || []).filter(isTime);
+      out.innerHTML = r.result === 'AVAILABLE' && times.length ? `<div class="chips">${times.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : r.result === 'CLOSED_DAY' ? '<p>Сервис закрыт.</p>' : '<p>Свободного времени нет.</p>';
+    } catch (e) { if (fresh() && e.code !== 'STALE') out.innerHTML = `<div class="note bad">${errText(e)}</div>`; }
+    finally { if (out.isConnected) ff.disabled = false; }
   };
 }
 
@@ -308,14 +357,14 @@ const RT = { timing_belt: 'ГРМ, нужна оценка', other: 'Друга�
 function rRequests() {
   hdr('Заявки', 'Открытые обращения из журнала', '<button class="btn" id="rrefresh">Обновить</button>');
   if (!reqs) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; loadRequests(); return; }
-  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)}</div>`; return; }
+  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)}</div><button class="btn" id="rretry">Попробовать ещё раз</button>`; return; }
   const l = reqs.data.requests || [];
   $('#main').innerHTML = (l.length ? `<div class="list">${l.map((q) => `<div class="card"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><h3>${esc(RT[q.kind] || q.service_name || q.kind)}</h3><span class="tag voice">Голос ${esc((q.lang || '').toUpperCase())}</span><span class="small">${esc(q.created_at)}</span></div><p><b>${esc(q.customer_name)}</b> · <span style="white-space:nowrap">${esc(q.phone)}</span>${q.car ? ' · ' + esc(q.car) : ''}</p>${q.notes ? `<p>${esc(q.notes)}</p>` : ''}${q.wanted_date ? `<p class="small">Желаемо: ${esc(q.wanted_date)} ${esc(q.wanted_time)}</p>` : ''}<p class="small">Статус: ${esc(q.status)}</p></div>`).join('')}</div>` : '<div class="empty"><h3>Открытых заявок нет</h3></div>') +
     '<p class="small">Закрыть заявку или записать клиента из панели можно будет на этапе B.</p>';
 }
 function demoSection(title, text) {
   hdr(title, 'Демонстрационный раздел');
-  $('#main').innerHTML = `<div class="note warn"><span class="tag demo">демо</span> ${text}</div><p><a class="btn" href="${PROTOTYPE}" target="_blank" rel="noopener">Открыть демо-прототип</a></p><p class="small">Демо-прототип работает на вымышленных данных и не связан с этим календарём.</p>`;
+  $('#main').innerHTML = `<div class="note warn"><span class="tag demo">демо</span> ${text}</div><p><a class="btn" href="${esc(PROTOTYPE)}" target="_blank" rel="noopener">Открыть демо-прототип</a></p><p class="small">Демо-прототип работает на вымышленных данных и не связан с этим календарём.</p>`;
 }
 function rClients() { demoSection('Клиенты', 'Настоящая база клиентов появится на этапе B. Здесь нет и не показываются данные демо-календаря.'); }
 function rChat() { demoSection('ИИ-чат', 'ИИ-чат пока только в демо-прототипе. Подключение к расписанию — на этапе B, с подтверждением каждого изменения.'); }
@@ -327,8 +376,9 @@ function rMore() {
 
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.tab) { tab = b.dataset.tab; render(); if (tab === 'requests') loadRequests(); return; }
-  if (b.dataset.go) { cur = b.dataset.go; view = 'day'; render(); return; }
+  if (!token && !b.closest('#login')) return; // без входа панель не рисуется
+  if (b.dataset.tab) { tab = b.dataset.tab; render(); return; } // загрузку журнала запускает rRequests, один запрос
+  if (b.dataset.go) { if (isDate(b.dataset.go)) { cur = b.dataset.go; view = 'day'; render(); } return; }
   const go = (d) => { cur = d; render(); }; // загрузку недели запускает rSchedule, один запрос
   switch (b.id) {
     case 'prev': return go(view === 'day' ? add(cur, -1) : add(weekStart(cur), -7));
@@ -336,15 +386,16 @@ document.addEventListener('click', (e) => {
     case 'tod': return go(tzToday());
     case 'vd': view = 'day'; return render();
     case 'vw': view = 'week'; return render();
-    case 'refresh': weeks[weekStart(cur)] = null; return go(cur);
-    case 'rrefresh': reqs = null; return loadRequests(true);
-    case 'logout': token = null; me = null; try { google.accounts.id.disableAutoSelect(); } catch (x) {} for (const k in weeks) delete weeks[k]; reqs = null; $('#main').innerHTML = ''; $('#login').hidden = false; $('#lmsg').innerHTML = '<p class="mut">Вы вышли.</p>'; return;
+    // Повторное нажатие, пока загрузка идёт, второй запрос не отправляет.
+    case 'refresh': case 'wretry': { const ws = weekStart(cur); if (inflight['w:' + ws]) return; delete weeks[ws]; return go(cur); }
+    case 'rrefresh': case 'rretry': if (inflight.r) return; reqs = null; return render();
+    case 'logout': clearSession(); try { google.accounts.id.disableAutoSelect(); } catch (x) {} $('#login').hidden = false; $('#lmsg').innerHTML = '<p class="mut">Вы вышли.</p>'; return;
   }
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !token) return;
   const w = weeks[weekStart(cur)];
-  if (w && Date.now() - w.at > FRESH) { loadWeek(weekStart(cur), true).then(render, render); loadRequests(true); }
+  if (w && !w.loading && Date.now() - w.at > FRESH) { loadWeek(weekStart(cur), true).then(rerender, rerender); loadRequests(true); }
 });
 initGoogle();
 }
