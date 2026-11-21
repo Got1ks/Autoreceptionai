@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>Панель автосервиса</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+/* VOICE work tool, calm; read-only stage
+   IDEA the workshop day sheet: large hanging times, one ticket per job
+   PICTURE the day list itself, tickets coloured by who booked them
+   COLOUR white / night graphite, ink, signal orange for actions, blue voice, grey calendar
+   TYPE Archivo
+   LAYOUT phone: header, list, bottom tabs; desktop: left rail */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#121416);--ink:light-dark(#15181b,#eceef0);--mut:light-dark(#5d6670,#9aa3ad);--line:light-dark(#e3e6ea,#2b2f35);--panel:light-dark(#f2f4f6,#1c1f23);--acc:#ff5a1f;--voice:light-dark(#2f6fde,#7aa4f2);--cal:light-dark(#5b6570,#a3acb6);--warn:light-dark(#a86d00,#f0b43a);--bad:light-dark(#c62828,#ff7272);--ok:light-dark(#1f8a4c,#55c98a)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Archivo,system-ui,sans-serif;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0}
+h1{font-size:22px}
+h2{font-size:20px;margin-bottom:10px}
+h3{font-size:16px;font-weight:700}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+header .grow{flex:1 1 140px}
+header small{display:block;color:var(--mut);font-size:13px}
+main{overflow:auto;padding:12px 16px 28px}
+nav{display:flex;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;min-height:58px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;font-weight:600;color:var(--mut);cursor:pointer;position:relative}
+nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-current=page]{color:var(--ink)}
+nav button[aria-current=page]::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;background:var(--acc)}
+nav .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--acc);color:#fff;border-radius:9px;font-size:11px;min-width:18px;padding:0 5px;line-height:18px}
+nav .brand{display:none}
+@media(min-width:900px){body{grid-template-columns:210px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}nav{grid-row:1/3;grid-column:1;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:12px 10px;gap:4px}nav .brand{display:block;font-weight:800;font-size:17px;padding:6px 10px 14px}nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:10px;min-height:46px;padding:0 12px;font-size:15px;border-radius:10px}nav button[aria-current=page]{background:var(--panel)}nav button[aria-current=page]::before{top:10px;bottom:10px;left:0;right:auto;width:3px;height:auto}nav .badge{position:static;margin-left:auto}header,main{grid-column:2}main{padding:16px 24px 32px}}
+.btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--mut)}
+.btn:focus-visible,nav button:focus-visible,.chip:focus-visible{outline:3px solid color-mix(in srgb,var(--acc) 60%,transparent);outline-offset:2px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn[disabled]{opacity:.45;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:none;min-height:40px;padding:0 12px;font-weight:600;cursor:pointer;color:var(--mut)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.datenav{display:flex;gap:4px}
+.datenav .btn{min-width:44px;padding:0 8px}
+.tag{display:inline-block;border-radius:6px;padding:1px 8px;font-size:13px;font-weight:600;background:var(--panel);white-space:nowrap}
+.tag.voice{background:color-mix(in srgb,var(--voice) 16%,var(--bg));color:var(--voice)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 18%,var(--bg));color:var(--warn)}
+.tag.ok{background:color-mix(in srgb,var(--ok) 16%,var(--bg));color:var(--ok)}
+.tag.ro{background:color-mix(in srgb,var(--ok) 14%,var(--bg));color:var(--ok)}
+.tag.demo{background:color-mix(in srgb,var(--warn) 18%,var(--bg));color:var(--warn)}
+.mut{color:var(--mut)}
+.note{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:15px;background:var(--panel)}
+.note.bad{background:color-mix(in srgb,var(--bad) 12%,var(--bg))}
+.note.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg))}
+.day{display:grid;gap:8px;max-width:760px}
+.job{display:grid;grid-template-columns:62px minmax(0,1fr);gap:12px;padding:12px;border:1px solid var(--line);border-left:5px solid var(--c,var(--cal));border-radius:12px}
+.job .t{font-weight:800;font-size:20px;line-height:1.1;font-variant-numeric:tabular-nums}
+.job .t small{display:block;font-weight:500;font-size:13px;color:var(--mut)}
+.job p{margin:2px 0;overflow-wrap:anywhere}
+.job .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.job .tags .tag{white-space:normal}
+.job.voice{--c:var(--voice)}
+.job.ext{--c:var(--cal);background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--mut) 8%,transparent) 0 8px,transparent 8px 16px)}
+.empty{padding:28px 16px;text-align:center;background:var(--panel);border-radius:14px;max-width:760px}
+.week{display:grid;gap:8px;max-width:760px}
+.wrow{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);text-align:left;cursor:pointer;width:100%}
+.wrow.today{border-color:var(--acc)}
+.wrow b{display:block;font-size:17px}
+.wrow .n{font-size:20px;font-weight:800;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:18px;min-height:36px;padding:6px 12px;font-size:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fld{display:grid;gap:4px;margin-bottom:10px}
+.fld label{font-size:14px;font-weight:600}
+.fld select,.fld input{min-height:46px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:16px;background:var(--bg)}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
+.card{border:1px solid var(--line);border-radius:12px;padding:12px;max-width:760px}
+.card p{margin:4px 0;overflow-wrap:anywhere}
+.list{display:grid;gap:8px}
+.login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto}
+.login .box{width:min(400px,100%)}
+.login h1{font-size:32px;margin-bottom:8px}
+#gbtn{min-height:44px;margin:16px 0}
+.small{font-size:13px;color:var(--mut)}
+code{font-size:14px;background:var(--panel);padding:2px 6px;border-radius:6px;overflow-wrap:anywhere}
+.loading{opacity:.6}
+</style>
+</head>
+<body>
+<div class="login" id="login">
+  <div class="box">
+    <h1>Панель автосервиса</h1>
+    <p class="mut">Вход только для сотрудников из списка. Доступ проверяется на сервере при каждом запросе.</p>
+    <div id="gbtn"></div>
+    <div id="lmsg"></div>
+    <p class="small">Режим только для чтения: расписание демо-календаря проекта и журнал заявок. Изменить ничего нельзя.</p>
+  </div>
+</div>
+
+<header id="hdr"></header>
+<main id="main"></main>
+<nav id="nav" aria-label="Разделы">
+  <div class="brand">AutoReception</div>
+  <button data-tab="schedule"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Расписание</button>
+  <button data-tab="requests"><svg viewBox="0 0 24 24"><path d="M4 13l2-8h12l2 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Заявки<span class="badge" id="rqb" hidden></span></button>
+  <button data-tab="clients"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/></svg>Клиенты</button>
+  <button data-tab="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>ИИ-чат</button>
+  <button data-tab="more"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Ещё</button>
+</nav>
+
+<script>
+{
+// ===== НАСТРОЙКИ (не секреты) =====
+const CLIENT_ID = '';
+const API = 'https://autoreception.app.n8n.cloud/webhook/autoreception/panel-api';
+const PROTOTYPE = 'https://claude.ai/artifact/EC3x2YduHiHBBCUMaydvR7';
+// ==================================
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const tzToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Riga' }).format(new Date());
+const parse = (s) => { const [a, b, c] = s.split('-').map(Number); return new Date(Date.UTC(a, b - 1, c)); };
+const iso = (d) => d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+const add = (s, n) => { const d = parse(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const dow = (s) => parse(s).getUTCDay();
+const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'], WDF = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+const MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const human = (s) => { const d = parse(s); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; };
+const weekStart = (s) => { let d = s; while (dow(d) !== 1) d = add(d, -1); return d; };
+
+// Токен Google хранится только в памяти страницы (не в localStorage/cookie).
+let token = null, tokenExp = 0, me = null;
+let tab = 'schedule', view = 'day', cur = tzToday();
+const weeks = {};       // кэш: начало недели -> { at, data | error }
+let reqs = null;         // { at, data | error }
+const FRESH = 5 * 60 * 1000;
+
+function b64json(part) { try { return JSON.parse(decodeURIComponent(escape(atob(part.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; } }
+
+async function api(body) {
+  if (!token || Date.now() / 1000 > tokenExp - 30) { expire(); throw { code: 'TOKEN_EXPIRED' }; }
+  let res;
+  try {
+    // text/plain — простой запрос без предварительного CORS-запроса; токен в теле, не в адресе.
+    res = await fetch(API, { method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(Object.assign({ id_token: token }, body)) });
+  } catch (e) { throw { code: 'NETWORK' }; }
+  let data = null;
+  try { data = await res.json(); } catch (e) { throw { code: 'BAD_RESPONSE', http: res.status }; }
+  if (!res.ok || !data || data.ok === false) {
+    const err = { code: (data && data.error_code) || 'HTTP_' + res.status, http: res.status, whoami: data && data.whoami };
+    if (err.code === 'TOKEN_EXPIRED' || err.http === 401) expire(err);
+    if (err.code === 'NOT_ALLOWED') denied(err);
+    throw err;
+  }
+  return data;
+}
+
+const ERR = {
+  NETWORK: 'Нет связи с сервером. Проверьте интернет и нажмите «Обновить».',
+  BAD_RESPONSE: 'Сервер ответил непонятно. Ничего не показано, чтобы не ввести в заблуждение.',
+  CALENDAR_UNAVAILABLE: 'Календарь сейчас недоступен. Расписание не показано.',
+  SHEETS_UNAVAILABLE: 'Журнал заявок сейчас недоступен.',
+  AUTH_CHECK_UNAVAILABLE: 'Не удалось проверить вход (ключи Google недоступны). Попробуйте через минуту.',
+  AUTH_NOT_CONFIGURED: 'Вход на сервере ещё не настроен.',
+  TOKEN_EXPIRED: 'Сессия истекла. Войдите снова.',
+  NOT_ALLOWED: 'Этого аккаунта нет в списке разрешённых.',
+  RANGE_TOO_LONG: 'Слишком длинный период.',
+};
+const errText = (e) => ERR[e.code] || ('Ошибка загрузки: ' + esc(e.code || 'неизвестно'));
+
+function onCredential(resp) {
+  const t = resp && resp.credential;
+  const p = t ? b64json(t.split('.')[1] || '') : null; // только для отображения; проверяет сервер
+  if (!t || !p) { $('#lmsg').innerHTML = '<div class="note bad">Google не вернул данные входа.</div>'; return; }
+  token = t; tokenExp = Number(p.exp) || 0; me = { email: p.email || '', name: p.name || '' };
+  $('#lmsg').innerHTML = '<p class="mut">Проверяю доступ…</p>';
+  loadWeek(weekStart(cur), true).then(() => {
+    $('#login').hidden = true;
+    loadRequests(true);
+    render();
+  }, (e) => {
+    if (e.code !== 'NOT_ALLOWED') { $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div>'; token = null; }
+  });
+}
+function denied(e) {
+  token = null;
+  const w = e.whoami || {};
+  $('#login').hidden = false;
+  $('#lmsg').innerHTML = '<div class="note bad"><b>Доступ не разрешён.</b> Подпись Google подтверждена, но этого аккаунта нет в списке сотрудников.' +
+    (w.sub ? '<br>Если это ваш рабочий аккаунт, передайте разработчику этот идентификатор (он не секретный):<br><code id="sub">' + esc(w.sub) + '</code> <button class="btn" id="copysub" style="min-height:36px">Копировать</button>' : '') + '</div>';
+  const b = $('#copysub'); if (b) b.onclick = () => { try { navigator.clipboard.writeText(w.sub).then(() => { b.textContent = 'Скопировано'; }, () => {}); } catch (x) {} };
+}
+function expire(e) {
+  token = null;
+  $('#login').hidden = false;
+  $('#lmsg').innerHTML = '<div class="note warn">' + (e && e.code && e.code !== 'TOKEN_EXPIRED' ? errText(e) : 'Сессия истекла. Войдите снова.') + '</div>';
+  try { google.accounts.id.prompt(); } catch (x) {}
+}
+function initGoogle() {
+  if (!CLIENT_ID) { $('#lmsg').innerHTML = '<div class="note warn">Вход ещё не настроен: нет Client ID Google.</div>'; return; }
+  if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(initGoogle, 300); return; }
+  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true, cancel_on_tap_outside: false, ux_mode: 'popup', use_fedcm_for_prompt: true });
+  google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'ru' });
+  google.accounts.id.prompt();
+}
+
+async function loadWeek(ws, force) {
+  const c = weeks[ws];
+  if (!force && c && c.data && Date.now() - c.at < FRESH) return c;
+  weeks[ws] = Object.assign({}, c, { loading: true });
+  try { const data = await api({ op: 'range', from: ws, to: add(ws, 6) }); weeks[ws] = { at: Date.now(), data }; }
+  catch (e) { weeks[ws] = { at: Date.now(), error: e }; if (e.code === 'NOT_ALLOWED' || e.http === 401) throw e; }
+  return weeks[ws];
+}
+async function loadRequests(force) {
+  if (!force && reqs && reqs.data && Date.now() - reqs.at < FRESH) return;
+  try { reqs = { at: Date.now(), data: await api({ op: 'requests', status: 'open', limit: 100 }) }; }
+  catch (e) { reqs = { at: Date.now(), error: e }; }
+  render();
+}
+
+function hdr(title, sub, extra) {
+  $('#hdr').innerHTML = `<div class="grow"><h1>${title} <span class="tag ro">только чтение</span></h1>${sub ? `<small>${sub}</small>` : ''}</div>${extra || ''}`;
+}
+function render() {
+  document.querySelectorAll('nav button[data-tab]').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  const n = reqs && reqs.data ? reqs.data.count : 0; const bd = $('#rqb'); bd.hidden = !n; bd.textContent = n;
+  ({ schedule: rSchedule, requests: rRequests, clients: rClients, chat: rChat, more: rMore })[tab]();
+}
+
+function srcTag(e) {
+  if (e.kind === 'external') return '<span class="tag">Событие календаря, не через AutoReception</span>';
+  if (e.kind === 'block_all_day') return '<span class="tag">Весь день занят</span>';
+  if (e.source === 'voice') return `<span class="tag voice">Голосовой ИИ · ${e.lang === 'lv' ? 'Seva, LV' : 'Kate, RU'}</span>`;
+  return '<span class="tag">AutoReception</span>';
+}
+function stTags(e) {
+  if (e.kind !== 'booking') return '';
+  if (e.needs_check) return '<span class="tag warn">Требует проверки</span>';
+  if (!e.in_journal) return '<span class="tag warn">Нет строки в журнале</span>';
+  return e.journal_status ? `<span class="tag ok">${esc(e.journal_status)}</span>` : '';
+}
+function jobHTML(e) {
+  const ext = e.kind !== 'booking';
+  const time = e.start ? `${e.start}<small>${e.end} · ${e.duration_min} мин</small>` : 'весь<small>день</small>';
+  const body = ext
+    ? `<p><b>Занято</b>${e.title ? ' — ' + esc(e.title) : ''}</p>`
+    : `<p><b>${esc(e.service_name || 'Работа')}</b></p><p>${esc(e.car)}</p><p>${esc(e.customer_name)} · <span style="white-space:nowrap">${esc(e.phone)}</span></p>${e.notes ? `<p class="mut">${esc(e.notes)}</p>` : ''}`;
+  return `<div class="job ${ext ? 'ext' : 'voice'}"><div class="t">${time}</div><div>${body}<div class="tags">${srcTag(e)}${stTags(e)}</div></div></div>`;
+}
+
+function rSchedule() {
+  const ws = weekStart(cur), w = weeks[ws];
+  const sub = view === 'day' ? `${human(cur)} · демо-календарь проекта` : `Неделя с ${human(ws)} · демо-календарь проекта`;
+  hdr(view === 'day' ? (cur === tzToday() ? 'Сегодня' : WDF[dow(cur)]) : 'Неделя', sub,
+    `<div class="datenav"><button class="btn" id="prev" aria-label="Назад">‹</button><button class="btn" id="tod">Сегодня</button><button class="btn" id="next" aria-label="Вперёд">›</button></div><div class="seg"><button id="vd" aria-pressed="${view === 'day'}">День</button><button id="vw" aria-pressed="${view === 'week'}">Неделя</button></div><button class="btn" id="refresh">Обновить</button>`);
+  if (!w || w.loading && !w.data) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; if (!w) loadWeek(ws).then(render, render); return; }
+  if (w.error) { $('#main').innerHTML = `<div class="note bad">${errText(w.error)}</div>`; return; }
+  const d = w.data;
+  let html = (d.warnings || []).includes('SHEETS_UNAVAILABLE') ? '<div class="note warn">Журнал сейчас недоступен: статусы записей не показаны. Расписание из календаря актуально.</div>' : '';
+  if (view === 'day') {
+    const day = (d.days || []).find((x) => x.date === cur);
+    const evs = (d.events || []).filter((e) => e.date === cur);
+    html += `<p class="mut" style="margin:0 0 10px">${day && day.open ? 'Открыто ' + day.open + '–' + day.close : 'Выходной'} · записей ${evs.filter((e) => e.kind === 'booking').length}${evs.some((e) => e.kind !== 'booking') ? ' · другие события ' + evs.filter((e) => e.kind !== 'booking').length : ''}</p>`;
+    html += evs.length ? `<div class="day">${evs.map(jobHTML).join('')}</div>` : `<div class="empty"><h3>Записей нет</h3><p class="mut">${day && day.open ? 'Весь день свободен.' : 'Сервис в этот день закрыт.'}</p></div>`;
+    if (day && day.open) html += `<div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Свободное время</h3><p class="small" style="margin-top:0">По тем же правилам, что у голосового ИИ: один пост, буфер 15 минут, не раньше чем через час.</p><div class="row2"><div class="fld"><label for="fsvc">Работа</label><select id="fsvc"><option value="oil_change">Замена масла</option><option value="tire_change_set">Шиномонтаж</option><option value="brake_pads">Тормозные колодки</option><option value="computer_diagnostics">Диагностика</option></select></div><div class="fld"><label>&nbsp;</label><button class="btn" id="ffind">Показать</button></div></div><div id="fres"></div></div>`;
+  } else {
+    html += '<div class="week">' + (d.days || []).map((x) => {
+      const evs = (d.events || []).filter((e) => e.date === x.date), b = evs.filter((e) => e.kind === 'booking').length;
+      return `<button class="wrow${x.date === tzToday() ? ' today' : ''}" data-go="${x.date}"><div><b>${WD[dow(x.date)]} ${parse(x.date).getUTCDate()}</b><span class="small">${MON[parse(x.date).getUTCMonth()].slice(0, 3)}</span></div><div class="small">${x.open ? x.open + '–' + x.close + (evs.length - b ? ' · других событий ' + (evs.length - b) : '') : 'выходной'}</div><div class="n">${b}</div></button>`;
+    }).join('') + '</div><p class="small">Число справа — записи AutoReception за день.</p>';
+  }
+  html += `<p class="small">Обновлено ${new Date(w.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}. Автоматического опроса нет: «Обновить» или возврат на страницу через 5 минут.</p>`;
+  $('#main').innerHTML = html;
+  const ff = $('#ffind');
+  if (ff) ff.onclick = async () => {
+    const out = $('#fres'); out.innerHTML = '<p class="mut">Проверяю…</p>';
+    try {
+      const r = await api({ op: 'free', date: cur, service_id: $('#fsvc').value });
+      out.innerHTML = r.result === 'AVAILABLE' ? `<div class="chips">${(r.all_times || []).map((t) => `<span class="chip">${t}</span>`).join('')}</div>` : r.result === 'CLOSED_DAY' ? '<p>Сервис закрыт.</p>' : '<p>Свободного времени нет.</p>';
+    } catch (e) { out.innerHTML = `<div class="note bad">${errText(e)}</div>`; }
+  };
+}
+
+const RT = { timing_belt: 'ГРМ, нужна оценка', other: 'Другая работа', reschedule_booking: 'Перенос записи', cancel_booking: 'Отмена записи', update_booking: 'Исправление записи', callback: 'Перезвонить' };
+function rRequests() {
+  hdr('Заявки', 'Открытые обращения из журнала', '<button class="btn" id="rrefresh">Обновить</button>');
+  if (!reqs) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; loadRequests(); return; }
+  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)}</div>`; return; }
+  const l = reqs.data.requests || [];
+  $('#main').innerHTML = (l.length ? `<div class="list">${l.map((q) => `<div class="card"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><h3>${esc(RT[q.kind] || q.service_name || q.kind)}</h3><span class="tag voice">Голос ${esc((q.lang || '').toUpperCase())}</span><span class="small">${esc(q.created_at)}</span></div><p><b>${esc(q.customer_name)}</b> · <span style="white-space:nowrap">${esc(q.phone)}</span>${q.car ? ' · ' + esc(q.car) : ''}</p>${q.notes ? `<p>${esc(q.notes)}</p>` : ''}${q.wanted_date ? `<p class="small">Желаемо: ${esc(q.wanted_date)} ${esc(q.wanted_time)}</p>` : ''}<p class="small">Статус: ${esc(q.status)}</p></div>`).join('')}</div>` : '<div class="empty"><h3>Открытых заявок нет</h3></div>') +
+    '<p class="small">Закрыть заявку или записать клиента из панели можно будет на этапе B.</p>';
+}
+function demoSection(title, text) {
+  hdr(title, 'Демонстрационный раздел');
+  $('#main').innerHTML = `<div class="note warn"><span class="tag demo">демо</span> ${text}</div><p><a class="btn" href="${PROTOTYPE}" target="_blank" rel="noopener">Открыть демо-прототип</a></p><p class="small">Демо-прототип работает на вымышленных данных и не связан с этим календарём.</p>`;
+}
+function rClients() { demoSection('Клиенты', 'Настоящая база клиентов появится на этапе B. Здесь нет и не показываются данные демо-календаря.'); }
+function rChat() { demoSection('ИИ-чат', 'ИИ-чат пока только в демо-прототипе. Подключение к расписанию — на этапе B, с подтверждением каждого изменения.'); }
+function rMore() {
+  hdr('Ещё', 'Сессия и состояние');
+  $('#main').innerHTML = `<div class="card"><p>Вы вошли как <b>${esc(me ? me.email : '')}</b></p><p class="small">Доступ проверяется на сервере при каждом запросе. Токен хранится только в памяти этой вкладки и действует около часа.</p><p><button class="btn" id="logout">Выйти</button></p></div>
+  <div class="card" style="margin-top:10px"><h3>Что показывает панель</h3><p>Расписание — демо-календарь проекта (тестовые записи голосового ИИ и события календаря). Заявки — журнал Bookings. Свободное время — по правилам голосового ИИ, один пост.</p><p class="small">Записывать, переносить и отменять из панели пока нельзя.</p></div>`;
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tab) { tab = b.dataset.tab; render(); if (tab === 'requests') loadRequests(); return; }
+  if (b.dataset.go) { cur = b.dataset.go; view = 'day'; render(); return; }
+  const go = (d) => { cur = d; render(); }; // загрузку недели запускает rSchedule, один запрос
+  switch (b.id) {
+    case 'prev': return go(view === 'day' ? add(cur, -1) : add(weekStart(cur), -7));
+    case 'next': return go(view === 'day' ? add(cur, 1) : add(weekStart(cur), 7));
+    case 'tod': return go(tzToday());
+    case 'vd': view = 'day'; return render();
+    case 'vw': view = 'week'; return render();
+    case 'refresh': weeks[weekStart(cur)] = null; return go(cur);
+    case 'rrefresh': reqs = null; return loadRequests(true);
+    case 'logout': token = null; me = null; try { google.accounts.id.disableAutoSelect(); } catch (x) {} for (const k in weeks) delete weeks[k]; reqs = null; $('#main').innerHTML = ''; $('#login').hidden = false; $('#lmsg').innerHTML = '<p class="mut">Вы вышли.</p>'; return;
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !token) return;
+  const w = weeks[weekStart(cur)];
+  if (w && Date.now() - w.at > FRESH) { loadWeek(weekStart(cur), true).then(render, render); loadRequests(true); }
+});
+initGoogle();
+}
+</script>
+</body>
+</html>
