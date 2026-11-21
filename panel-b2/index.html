@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MpP2thIGewf4uP8ljg+RRF+jeov+UPTzN77OXkM92mE=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="robots" content="noindex,nofollow">
+<title>Панель автосервиса</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+/* VOICE work tool, calm; read-only stage
+   IDEA the workshop day sheet: large hanging times, one ticket per job
+   PICTURE the day list itself, tickets coloured by who booked them
+   COLOUR white / night graphite, ink, signal orange for actions, blue voice, grey calendar
+   TYPE Archivo
+   LAYOUT phone: header, list, bottom tabs; desktop: left rail */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#121416);--ink:light-dark(#15181b,#eceef0);--mut:light-dark(#5d6670,#9aa3ad);--line:light-dark(#e3e6ea,#2b2f35);--panel:light-dark(#f2f4f6,#1c1f23);--acc:#ff5a1f;--voice:light-dark(#2f6fde,#7aa4f2);--cal:light-dark(#5b6570,#a3acb6);--warn:light-dark(#a86d00,#f0b43a);--bad:light-dark(#c62828,#ff7272);--ok:light-dark(#1f8a4c,#55c98a)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Archivo,system-ui,sans-serif;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0}
+h1{font-size:22px}
+h2{font-size:20px;margin-bottom:10px}
+h3{font-size:16px;font-weight:700}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+header .grow{flex:1 1 140px}
+header small{display:block;color:var(--mut);font-size:13px}
+main{overflow:auto;padding:12px 16px 28px}
+nav{display:flex;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;min-height:58px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;font-weight:600;color:var(--mut);cursor:pointer;position:relative}
+nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-current=page]{color:var(--ink)}
+nav button[aria-current=page]::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;background:var(--acc)}
+nav .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--acc);color:#fff;border-radius:9px;font-size:11px;min-width:18px;padding:0 5px;line-height:18px}
+nav .brand{display:none}
+@media(min-width:900px){body{grid-template-columns:210px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}nav{grid-row:1/3;grid-column:1;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:12px 10px;gap:4px}nav .brand{display:block;font-weight:800;font-size:17px;padding:6px 10px 14px}nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:10px;min-height:46px;padding:0 12px;font-size:15px;border-radius:10px}nav button[aria-current=page]{background:var(--panel)}nav button[aria-current=page]::before{top:10px;bottom:10px;left:0;right:auto;width:3px;height:auto}nav .badge{position:static;margin-left:auto}header,main{grid-column:2}main{padding:16px 24px 32px}}
+.btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--mut)}
+.btn:focus-visible,nav button:focus-visible,.chip:focus-visible{outline:3px solid color-mix(in srgb,var(--acc) 60%,transparent);outline-offset:2px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn[disabled]{opacity:.45;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:none;min-height:40px;padding:0 12px;font-weight:600;cursor:pointer;color:var(--mut)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.datenav{display:flex;gap:4px}
+.datenav .btn{min-width:44px;padding:0 8px}
+.tag{display:inline-block;border-radius:6px;padding:1px 8px;font-size:13px;font-weight:600;background:var(--panel);white-space:nowrap}
+.tag.voice{background:color-mix(in srgb,var(--voice) 16%,var(--bg));color:var(--voice)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 18%,var(--bg));color:var(--warn)}
+.tag.ok{background:color-mix(in srgb,var(--ok) 16%,var(--bg));color:var(--ok)}
+.tag.ro{background:color-mix(in srgb,var(--ok) 14%,var(--bg));color:var(--ok)}
+.tag.demo{background:color-mix(in srgb,var(--warn) 18%,var(--bg));color:var(--warn)}
+.mut{color:var(--mut)}
+.note{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:15px;background:var(--panel)}
+.note.bad{background:color-mix(in srgb,var(--bad) 12%,var(--bg))}
+.note.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg))}
+.day{display:grid;gap:8px;max-width:760px}
+.job{display:grid;grid-template-columns:62px minmax(0,1fr);gap:12px;padding:12px;border:1px solid var(--line);border-left:5px solid var(--c,var(--cal));border-radius:12px}
+.job .t{font-weight:800;font-size:20px;line-height:1.1;font-variant-numeric:tabular-nums}
+.job .t small{display:block;font-weight:500;font-size:13px;color:var(--mut)}
+.job p{margin:2px 0;overflow-wrap:anywhere}
+.job .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.job .tags .tag{white-space:normal}
+.job.voice{--c:var(--voice)}
+.job.ext{--c:var(--cal);background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--mut) 8%,transparent) 0 8px,transparent 8px 16px)}
+.empty{padding:28px 16px;text-align:center;background:var(--panel);border-radius:14px;max-width:760px}
+.week{display:grid;gap:8px;max-width:760px}
+.wrow{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);text-align:left;cursor:pointer;width:100%}
+.wrow.today{border-color:var(--acc)}
+.wrow b{display:block;font-size:17px}
+.wrow .n{font-size:20px;font-weight:800;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:18px;min-height:36px;padding:6px 12px;font-size:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fld{display:grid;gap:4px;margin-bottom:10px}
+.fld label{font-size:14px;font-weight:600}
+.fld select,.fld input{min-height:46px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:16px;background:var(--bg)}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
+.card{border:1px solid var(--line);border-radius:12px;padding:12px;max-width:760px}
+.card p{margin:4px 0;overflow-wrap:anywhere}
+.list{display:grid;gap:8px}
+.login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto}
+.login .box{width:min(400px,100%)}
+.login h1{font-size:32px;margin-bottom:8px}
+#gbtn{min-height:44px;margin:16px 0}
+.small{font-size:13px;color:var(--mut)}
+code{font-size:14px;background:var(--panel);padding:2px 6px;border-radius:6px;overflow-wrap:anywhere}
+.loading{opacity:.6}
+.chip[aria-pressed="true"]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.fld textarea{min-height:70px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:16px;background:var(--bg);font:inherit}
+.fld .err{color:var(--bad);font-size:14px}
+.fld input[aria-invalid="true"],.fld select[aria-invalid="true"]{border-color:var(--bad)}
+.note.good{background:color-mix(in srgb,var(--ok) 14%,var(--bg))}
+@media(max-width:899px){nav button{min-width:0;font-size:11px}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:8px 0}.kv dt{opacity:.7;font-size:14px}.kv dd{margin:0;font-weight:600}
+.big{width:100%;min-height:50px;font-size:17px}
+</style>
+</head>
+<body>
+<div class="login" id="login">
+  <div class="box">
+    <h1>Панель автосервиса</h1>
+    <p class="mut">Вход только для сотрудников из списка. Доступ проверяется на сервере при каждом запросе.</p>
+    <div id="gbtn"></div>
+    <div id="lmsg"></div>
+    <p class="small">Режим только для чтения: расписание демо-календаря проекта и журнал заявок. Изменить ничего нельзя.</p>
+  </div>
+</div>
+
+<header id="hdr"></header>
+<main id="main"></main>
+<nav id="nav" aria-label="Разделы">
+  <div class="brand">AutoReception</div>
+  <button data-tab="schedule"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Расписание</button>
+  <button data-tab="new"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Записать</button>
+  <button data-tab="requests"><svg viewBox="0 0 24 24"><path d="M4 13l2-8h12l2 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Заявки<span class="badge" id="rqb" hidden></span></button>
+  <button data-tab="clients"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/></svg>Клиенты</button>
+  <button data-tab="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>ИИ-чат</button>
+  <button data-tab="more"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Ещё</button>
+</nav>
+
+<script>
+{
+// ===== НАСТРОЙКИ (не секреты) =====
+const CLIENT_ID = '156627881891-q50bqubjoaf3v3lpkhhtpgo4pc2fu2jj.apps.googleusercontent.com';
+const API = 'https://autoreception.app.n8n.cloud/webhook/autoreception/panel-api';
+const PROTOTYPE = 'https://claude.ai/artifact/EC3x2YduHiHBBCUMaydvR7';
+// ==================================
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const tzToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Riga' }).format(new Date());
+const parse = (s) => { const [a, b, c] = s.split('-').map(Number); return new Date(Date.UTC(a, b - 1, c)); };
+const iso = (d) => d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+const add = (s, n) => { const d = parse(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const dow = (s) => parse(s).getUTCDay();
+const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'], WDF = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+const MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const human = (s) => { const d = parse(s); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; };
+const nowHM = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Riga', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+// Состояние дня для подписи: прошёл / закрыт / рабочее время закончилось / идёт / впереди.
+function dayState(day, date) {
+  const t = tzToday();
+  if (date < t) return 'past';
+  if (!day || !day.open) return 'closed';
+  if (date === t) { const n = nowHM(); if (n >= day.close) return 'over'; if (n >= day.open) return 'now'; }
+  return 'ahead';
+}
+const weekStart = (s) => { let d = s; while (dow(d) !== 1) d = add(d, -1); return d; };
+
+// Токен Google хранится только в памяти страницы (не в localStorage/cookie).
+let token = null, tokenExp = 0, me = null, bodyType = 'text';
+let tab = 'schedule', view = 'day', cur = tzToday();
+const weeks = {};       // кэш: начало недели -> { at, data | error }
+let reqs = null;         // { at, data | error }
+const FRESH = 5 * 60 * 1000;
+// Поколение сессии: меняется при входе, выходе, истечении и отказе. Ответ, пришедший после смены
+// поколения, отбрасывается — данные прошлой сессии не попадут на экран и в кэш.
+let gen = 0;
+const inflight = {};     // ключ -> { gen, p } — один запрос на неделю/журнал одновременно
+const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isTime = (s) => typeof s === 'string' && /^\d{2}:\d{2}$/.test(s);
+function clearSession() {
+  gen++;
+  token = null; tokenExp = 0; me = null;
+  for (const k in weeks) delete weeks[k];
+  for (const k in inflight) delete inflight[k];
+  reqs = null;
+  $('#main').innerHTML = ''; $('#hdr').innerHTML = '';
+  const bd = $('#rqb'); if (bd) { bd.hidden = true; bd.textContent = ''; }
+}
+
+function b64json(part) { try { return JSON.parse(decodeURIComponent(escape(atob(part.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; } }
+
+async function api(body) {
+  const g = gen;
+  if (!token || Date.now() / 1000 > tokenExp - 30) { expire(); throw { code: 'TOKEN_EXPIRED' }; }
+  // Токен — в теле POST, не в адресе. Сначала text/plain (без предварительного CORS-запроса);
+  // если сервер не разобрал тело (NO_TOKEN при отправленном токене) или браузер отказал — один повтор как JSON.
+  const send = (ct) => fetch(API, { method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { 'Content-Type': ct }, body: JSON.stringify(Object.assign({ id_token: token }, body)) });
+  let res = null, data = null;
+  for (const ct of bodyType === 'json' ? ['application/json'] : ['text/plain;charset=UTF-8', 'application/json']) {
+    // commit при обрыве не переотправляется автоматически: итог узнаём через op_status (повтор безопасен на сервере, но не нужен).
+    try { res = await send(ct); } catch (e) { res = null; if (body.op === 'commit') break; continue; }
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (data && data.error_code === 'NO_TOKEN' && ct.startsWith('text/')) continue;
+    if (ct === 'application/json') bodyType = 'json';
+    break;
+  }
+  if (g !== gen) throw { code: 'STALE' }; // сессия сменилась, пока шёл запрос
+  if (!res) throw { code: 'NETWORK' };
+  if (!data) throw { code: 'BAD_RESPONSE', http: res.status };
+  if (!res.ok || !data || data.ok === false) {
+    const err = { code: (data && data.error_code) || 'HTTP_' + res.status, http: res.status, whoami: data && data.whoami, data };
+    if (err.code === 'TOKEN_EXPIRED' || err.http === 401) expire(err);
+    if (err.code === 'NOT_ALLOWED') denied(err);
+    throw err;
+  }
+  return data;
+}
+
+const ERR = {
+  NETWORK: 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
+  BAD_RESPONSE: 'Сервер ответил непонятно. Ничего не показано, чтобы не ввести в заблуждение.',
+  CALENDAR_UNAVAILABLE: 'Календарь сейчас недоступен. Расписание не показано.',
+  SHEETS_UNAVAILABLE: 'Журнал заявок сейчас недоступен.',
+  AUTH_CHECK_UNAVAILABLE: 'Не удалось проверить вход (ключи Google недоступны). Попробуйте через минуту.',
+  AUTH_NOT_CONFIGURED: 'Вход на сервере ещё не настроен.',
+  TOKEN_EXPIRED: 'Сессия истекла. Войдите снова.',
+  NOT_ALLOWED: 'Этого аккаунта нет в списке разрешённых.',
+  RANGE_TOO_LONG: 'Слишком длинный период.',
+};
+const errText = (e) => ERR[e.code] || ('Ошибка загрузки: ' + esc(e.code || 'неизвестно'));
+
+function onCredential(resp) {
+  const t = resp && resp.credential;
+  const p = t ? b64json(t.split('.')[1] || '') : null; // только для отображения; проверяет сервер
+  if (!t || !p) { $('#lmsg').innerHTML = '<div class="note bad">Google не вернул данные входа.</div>'; return; }
+  clearSession(); // новый вход — всегда с чистым кэшем, даже если аккаунт тот же
+  token = t; tokenExp = Number(p.exp) || 0; me = { email: String(p.email || ''), name: String(p.name || '') };
+  const g = gen;
+  $('#lmsg').innerHTML = '<p class="mut">Проверяю доступ…</p>';
+  loadWeek(weekStart(cur), true).then((w) => {
+    if (g !== gen) return;
+    const e = w && w.error;
+    // Не удалось связаться или проверить вход — остаёмся на экране входа. Календарь недоступен — вход подтверждён, открываем.
+    if (e && (['NETWORK', 'BAD_RESPONSE', 'AUTH_CHECK_UNAVAILABLE', 'AUTH_NOT_CONFIGURED'].includes(e.code) || /^HTTP_/.test(e.code))) {
+      clearSession(); // токен не держим, пока панель закрыта; для «Повторить» он остаётся только в этом замыкании
+      $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div><button class="btn" id="retry">Повторить</button>';
+      $('#retry').onclick = () => onCredential({ credential: t });
+      return;
+    }
+    $('#login').hidden = true;
+    loadRequests(true);
+    render();
+  }, (e) => {
+    if (g !== gen || e.code === 'STALE') return;
+    if (e.code !== 'NOT_ALLOWED') { clearSession(); $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div>'; }
+  });
+}
+function denied(e) {
+  clearSession();
+  const w = e.whoami || {};
+  $('#login').hidden = false;
+  $('#lmsg').innerHTML = '<div class="note bad"><b>Доступ не разрешён.</b> Подпись Google подтверждена, но этого аккаунта нет в списке сотрудников.' +
+    (w.sub ? '<br>Если это ваш рабочий аккаунт, передайте разработчику этот идентификатор (он не секретный):<br><code id="sub">' + esc(w.sub) + '</code> <button class="btn" id="copysub" style="min-height:36px">Копировать</button>' : '') + '</div>';
+  const b = $('#copysub'); if (b) b.onclick = () => { try { navigator.clipboard.writeText(w.sub).then(() => { b.textContent = 'Скопировано'; }, () => {}); } catch (x) {} };
+}
+function expire(e) {
+  clearSession();
+  $('#login').hidden = false;
+  $('#lmsg').innerHTML = '<div class="note warn">' + (e && e.code && e.code !== 'TOKEN_EXPIRED' ? errText(e) : 'Сессия истекла. Войдите снова.') + '</div>';
+  try { google.accounts.id.prompt(); } catch (x) {}
+}
+function initGoogle() {
+  if (!CLIENT_ID) { $('#lmsg').innerHTML = '<div class="note warn">Вход ещё не настроен: нет Client ID Google.</div>'; return; }
+  if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(initGoogle, 300); return; }
+  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true, cancel_on_tap_outside: false, ux_mode: 'popup', use_fedcm_for_prompt: true });
+  google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'ru' });
+  google.accounts.id.prompt();
+}
+
+function loadWeek(ws, force) {
+  const c = weeks[ws];
+  if (!force && c && c.data && Date.now() - c.at < FRESH) return Promise.resolve(c);
+  const key = 'w:' + ws, f = inflight[key];
+  if (f && f.gen === gen) return f.p; // такой запрос уже идёт — ждём его, второй не отправляем
+  const g = gen;
+  weeks[ws] = Object.assign({}, c, { loading: true });
+  const p = (async () => {
+    try { const data = await api({ op: 'range', from: ws, to: add(ws, 6) }); if (g === gen) weeks[ws] = { at: Date.now(), data }; }
+    catch (e) {
+      if (g !== gen || e.code === 'STALE') throw { code: 'STALE' };
+      weeks[ws] = { at: Date.now(), error: e }; // ошибка не кэшируется как свежие данные: следующий показ запросит снова
+      if (e.code === 'NOT_ALLOWED' || e.http === 401) throw e;
+    } finally { if (inflight[key] && inflight[key].p === p) delete inflight[key]; }
+    return weeks[ws];
+  })();
+  inflight[key] = { gen: g, p };
+  return p;
+}
+function loadRequests(force) {
+  if (!force && reqs && reqs.data && Date.now() - reqs.at < FRESH) return Promise.resolve();
+  const f = inflight.r;
+  if (f && f.gen === gen) return f.p;
+  const g = gen;
+  const p = (async () => {
+    try { const data = await api({ op: 'requests', status: 'open', limit: 100 }); if (g === gen) reqs = { at: Date.now(), data }; }
+    catch (e) { if (g !== gen || e.code === 'STALE') return; reqs = { at: Date.now(), error: e }; }
+    finally { if (inflight.r && inflight.r.p === p) delete inflight.r; }
+    if (g === gen && token) render();
+  })();
+  inflight.r = { gen: g, p };
+  return p;
+}
+const rerender = () => { if (token) render(); };
+
+function hdr(title, sub, extra, rw) {
+  // title и sub — всегда текст (экранируются); extra — только разметка самой страницы, без данных сервера.
+  $('#hdr').innerHTML = `<div class="grow"><h1>${esc(title)}${rw ? '' : ' <span class="tag ro">только чтение</span>'}</h1>${sub ? `<small>${esc(sub)}</small>` : ''}</div>${extra || ''}`;
+}
+function render() {
+  document.querySelectorAll('nav button[data-tab]').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  // Журнал недоступен — количество неизвестно: показываем «?», а не ноль.
+  const bd = $('#rqb');
+  if (reqs && reqs.error) { bd.hidden = false; bd.textContent = '?'; bd.title = 'Журнал недоступен — число заявок неизвестно'; }
+  else { const n = reqs && reqs.data ? Math.max(0, Number(reqs.data.count) || 0) : 0; bd.hidden = !n; bd.textContent = String(n); bd.title = n ? 'Открытых заявок: ' + n : ''; }
+  ({ schedule: rSchedule, new: rNew, requests: rRequests, clients: rClients, chat: rChat, more: rMore })[tab]();
+}
+
+function srcTag(e) {
+  if (e.kind === 'external') return '<span class="tag">Событие календаря, не через AutoReception</span>';
+  if (e.kind === 'block_all_day') return '<span class="tag">Весь день занят</span>';
+  if (e.source === 'voice') return `<span class="tag voice">Голосовой ИИ · ${e.lang === 'lv' ? 'Seva, LV' : 'Kate, RU'}</span>`;
+  return '<span class="tag">AutoReception</span>';
+}
+function stTags(e) {
+  if (e.kind !== 'booking') return '';
+  if (e.needs_check) return '<span class="tag warn">Требует проверки</span>';
+  if (!e.in_journal) return '<span class="tag warn">Нет строки в журнале</span>';
+  return e.journal_status ? `<span class="tag ok">${esc(e.journal_status)}</span>` : '';
+}
+function jobHTML(e) {
+  const ext = e.kind !== 'booking';
+  const time = e.start ? `${esc(e.start)}<small>${esc(e.end)} · ${esc(e.duration_min)} мин</small>` : 'весь<small>день</small>';
+  const body = ext
+    ? `<p><b>Занято</b>${e.title ? ' — ' + esc(e.title) : ''}</p>`
+    : `<p><b>${esc(e.service_name || 'Работа')}</b></p><p>${esc(e.car)}</p><p>${esc(e.customer_name)} · <span style="white-space:nowrap">${esc(e.phone)}</span></p>${e.notes ? `<p class="mut">${esc(e.notes)}</p>` : ''}`;
+  return `<div class="job ${ext ? 'ext' : 'voice'}"><div class="t">${time}</div><div>${body}<div class="tags">${srcTag(e)}${stTags(e)}</div></div></div>`;
+}
+
+let freeSeq = 0;
+function rSchedule() {
+  const ws = weekStart(cur), w = weeks[ws];
+  const sub = view === 'day' ? `${human(cur)} · демо-календарь проекта` : `Неделя с ${human(ws)} · демо-календарь проекта`;
+  hdr(view === 'day' ? (cur === tzToday() ? 'Сегодня' : WDF[dow(cur)]) : 'Неделя', sub,
+    `<div class="datenav"><button class="btn" id="prev" aria-label="Назад">‹</button><button class="btn" id="tod">Сегодня</button><button class="btn" id="next" aria-label="Вперёд">›</button></div><div class="seg"><button id="vd" aria-pressed="${view === 'day'}">День</button><button id="vw" aria-pressed="${view === 'week'}">Неделя</button></div><button class="btn" id="refresh">Обновить</button>`);
+  if (!w || w.loading && !w.data) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; if (!w) loadWeek(ws).then(rerender, rerender); return; }
+  if (w.error) { $('#main').innerHTML = `<div class="note bad">${errText(w.error)}</div><button class="btn" id="wretry">Попробовать ещё раз</button>`; return; }
+  const d = w.data;
+  let html = (d.warnings || []).includes('SHEETS_UNAVAILABLE') ? '<div class="note warn">Журнал сейчас недоступен: статусы записей не показаны. Расписание из календаря актуально.</div>' : '';
+  if (view === 'day') {
+    const day = (d.days || []).find((x) => x.date === cur);
+    const evs = (d.events || []).filter((e) => e.date === cur);
+    const st = dayState(day, cur), hrs = day && day.open ? esc(day.open) + '–' + esc(day.close) : '';
+    const nb = evs.filter((e) => e.kind === 'booking').length, no = evs.length - nb;
+    const hoursLine = { past: hrs ? 'Работали ' + hrs : 'Выходной', closed: 'Выходной', over: 'Работали ' + hrs + ' · рабочий день закончился', now: 'Открыто ' + hrs + ' · идёт рабочий день', ahead: 'Открыто ' + hrs }[st];
+    html += `<p class="mut" style="margin:0 0 10px">${hoursLine} · записей ${nb}${no ? ' · другие события ' + no : ''}</p>`;
+    // «Записей нет» не означает «можно записать»: возможность записи зависит от времени, длительности работы и правил.
+    const emptyText = {
+      past: 'Этот день уже прошёл.',
+      closed: 'Сервис в этот день закрыт — записать нельзя.',
+      over: 'Рабочий день закончился в ' + esc(day && day.close) + '. На сегодня записать уже нельзя.',
+      now: 'Это не значит, что можно записать на любое время: запись не раньше чем через час и с учётом длительности работы. Точные варианты — в «Свободном времени» ниже.',
+      ahead: 'Можно ли записать нового клиента и на какое время, зависит от работы — проверьте «Свободное время» ниже.',
+    }[st];
+    html += evs.length ? `<div class="day">${evs.map(jobHTML).join('')}</div>` : `<div class="empty"><h3>${st === 'past' ? 'Записей не было' : 'Записей нет'}</h3><p class="mut">${emptyText}</p></div>`;
+    if (evs.length && st === 'over') html += '<p class="small">Рабочий день закончился — на сегодня записать уже нельзя.</p>';
+    if (st === 'now' || st === 'ahead') html += `<div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Свободное время</h3><p class="small" style="margin-top:0">По тем же правилам, что у голосового ИИ: один пост, буфер 15 минут, не раньше чем через час.</p><div class="row2"><div class="fld"><label for="fsvc">Работа</label><select id="fsvc"><option value="oil_change">Замена масла</option><option value="tire_change_set">Шиномонтаж</option><option value="brake_pads">Тормозные колодки</option><option value="computer_diagnostics">Диагностика</option></select></div><div class="fld"><label>&nbsp;</label><button class="btn" id="ffind">Показать</button></div></div><div id="fres"></div></div>`;
+  } else {
+    html += '<div class="week">' + (d.days || []).filter((x) => x && isDate(x.date)).map((x) => {
+      const evs = (d.events || []).filter((e) => e.date === x.date), b = evs.filter((e) => e.kind === 'booking').length;
+      return `<button class="wrow${x.date === tzToday() ? ' today' : ''}" data-go="${esc(x.date)}"><div><b>${WD[dow(x.date)]} ${parse(x.date).getUTCDate()}</b><span class="small">${MON[parse(x.date).getUTCMonth()].slice(0, 3)}</span></div><div class="small">${x.open ? esc(x.open) + '–' + esc(x.close) + (evs.length - b ? ' · других событий ' + (evs.length - b) : '') : 'выходной'}</div><div class="n">${b}</div></button>`;
+    }).join('') + '</div><p class="small">Число справа — записи AutoReception за день.</p>';
+  }
+  html += `<p class="small">Обновлено ${new Date(w.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}. Автоматического опроса нет: «Обновить» или возврат на страницу через 5 минут.</p>`;
+  $('#main').innerHTML = html;
+  const ff = $('#ffind');
+  if (ff) ff.onclick = async () => {
+    const out = $('#fres'), my = ++freeSeq, day = cur; out.innerHTML = '<p class="mut">Проверяю…</p>'; ff.disabled = true;
+    // Показываем ответ, только если это последний запрос, тот же день и элемент ещё на экране.
+    const fresh = () => my === freeSeq && day === cur && out.isConnected;
+    try {
+      const r = await api({ op: 'free', date: day, service_id: $('#fsvc').value });
+      if (!fresh()) return;
+      const times = (r.all_times || []).filter(isTime);
+      out.innerHTML = r.result === 'AVAILABLE' && times.length ? `<div class="chips">${times.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : r.result === 'CLOSED_DAY' ? '<p>Сервис закрыт.</p>' : '<p>Свободного времени нет.</p>';
+    } catch (e) { if (fresh() && e.code !== 'STALE') out.innerHTML = `<div class="note bad">${errText(e)}</div>`; }
+    finally { if (out.isConnected) ff.disabled = false; }
+  };
+}
+
+const RT = { timing_belt: 'ГРМ, нужна оценка', other: 'Другая работа', reschedule_booking: 'Перенос записи', cancel_booking: 'Отмена записи', update_booking: 'Исправление записи', callback: 'Перезвонить' };
+function rRequests() {
+  hdr('Заявки', 'Открытые обращения из журнала', '<button class="btn" id="rrefresh">Обновить</button>');
+  if (!reqs) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; loadRequests(); return; }
+  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)} Сколько сейчас открытых заявок — неизвестно; это не значит, что их нет.</div><button class="btn" id="rretry">Попробовать ещё раз</button>`; return; }
+  const l = reqs.data.requests || [];
+  $('#main').innerHTML = (l.length ? `<div class="list">${l.map((q) => `<div class="card"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><h3>${esc(RT[q.kind] || q.service_name || q.kind)}</h3><span class="tag voice">Голос ${esc((q.lang || '').toUpperCase())}</span><span class="small">${esc(q.created_at)}</span></div><p><b>${esc(q.customer_name)}</b> · <span style="white-space:nowrap">${esc(q.phone)}</span>${q.car ? ' · ' + esc(q.car) : ''}</p>${q.notes ? `<p>${esc(q.notes)}</p>` : ''}${q.wanted_date ? `<p class="small">Желаемо: ${esc(q.wanted_date)} ${esc(q.wanted_time)}</p>` : ''}<p class="small">Статус: ${esc(q.status)}</p></div>`).join('')}</div>` : '<div class="empty"><h3>Открытых заявок нет</h3></div>') +
+    '<p class="small">Закрыть заявку или записать клиента из панели можно будет на этапе B.</p>';
+}
+function demoSection(title, text) {
+  hdr(title, 'Демонстрационный раздел');
+  $('#main').innerHTML = `<div class="note warn"><span class="tag demo">демо</span> ${text}</div><p><a class="btn" href="${esc(PROTOTYPE)}" target="_blank" rel="noopener">Открыть демо-прототип</a></p><p class="small">Демо-прототип работает на вымышленных данных и не связан с этим календарём.</p>`;
+}
+function rClients() { demoSection('Клиенты', 'Настоящая база клиентов появится на этапе B. Здесь нет и не показываются данные демо-календаря.'); }
+function rChat() { demoSection('ИИ-чат', 'ИИ-чат пока только в демо-прототипе. Подключение к расписанию — на этапе B, с подтверждением каждого изменения.'); }
+function rMore() {
+  hdr('Ещё', 'Сессия и состояние');
+  $('#main').innerHTML = `<div class="card"><p>Вы вошли как <b>${esc(me ? me.email : '')}</b></p><p class="small">Доступ проверяется на сервере при каждом запросе. Токен хранится только в памяти этой вкладки и действует около часа.</p><p><button class="btn" id="logout">Выйти</button></p></div>
+  <div class="card" style="margin-top:10px"><h3>Что показывает панель</h3><p>Расписание — демо-календарь проекта (тестовые записи голосового ИИ и события календаря). Заявки — журнал Bookings. Свободное время — по правилам голосового ИИ, один пост.</p><p class="small">Записывать, переносить и отменять из панели пока нельзя.</p></div>`;
+}
+
+// ===== B2: ручная запись =====
+// В sessionStorage — только op_id незавершённой операции (без имени, телефона, машины). Данные формы — только в памяти вкладки.
+const NB_KEY = 'ar_b2_op';
+const SVC_FALLBACK = [{ id: 'oil_change', name_ru: 'Замена масла' }, { id: 'tire_change_set', name_ru: 'Шиномонтаж' }, { id: 'brake_pads', name_ru: 'Тормозные колодки' }, { id: 'computer_diagnostics', name_ru: 'Диагностика' }];
+let nb = null, svcs = null, nbSeq = 0;
+const nbNew = () => ({ step: 'form', f: { service_id: '', date: '', time: '', customer_name: '', phone: '', car_make: '', car_model: '', notes: '' }, times: null, errs: {}, prep: null, res: null, busy: false });
+// Те же правила, что у голосового ИИ (normalizePhone / validateBookingRequest); окончательно проверяет сервер.
+function phoneNorm(raw) {
+  const s = String(raw || '').trim(); let plus = s.startsWith('+'); let d = s.replace(/\D/g, '');
+  if (!plus && d.startsWith('00')) { d = d.slice(2); plus = true; }
+  if (!plus) { if (d.length === 8 && /^[26]/.test(d)) return '+371' + d; if (d.length === 11 && d.startsWith('371') && /^[26]/.test(d.slice(3))) return '+' + d; return null; }
+  if (d.startsWith('371')) return d.length === 11 && /^[26]/.test(d.slice(3)) ? '+' + d : null;
+  return d.length >= 8 && d.length <= 15 ? '+' + d : null;
+}
+function nbValidate(f) {
+  const e = {}, t = (x) => String(x || '').replace(/\s+/g, ' ').trim();
+  if (!f.service_id) e.service_id = 'Выберите работу';
+  if (!isDate(f.date)) e.date = 'Выберите дату';
+  else if (f.date < tzToday()) e.date = 'Дата уже прошла';
+  else if (f.date > add(tzToday(), 60)) e.date = 'Не дальше чем на 60 дней';
+  else if (dow(f.date) === 0) e.date = 'В воскресенье сервис закрыт';
+  if (!isTime(f.time)) e.time = 'Выберите время из списка';
+  if (t(f.customer_name).length < 2) e.customer_name = 'Имя — минимум 2 буквы';
+  if (!phoneNorm(f.phone)) e.phone = 'Телефон Латвии: 8 цифр, начинается с 2 или 6';
+  if (!t(f.car_make)) e.car_make = 'Укажите марку';
+  if (!t(f.car_model)) e.car_model = 'Укажите модель';
+  return e;
+}
+const nbBooking = (f) => ({ service_id: f.service_id, date: f.date, time: f.time, customer_name: f.customer_name, phone: f.phone, car_make: f.car_make, car_model: f.car_model, notes: f.notes, lang: 'ru' });
+const saveOp = (id) => { try { id ? sessionStorage.setItem(NB_KEY, id) : sessionStorage.removeItem(NB_KEY); } catch (x) {} };
+const savedOp = () => { try { const v = sessionStorage.getItem(NB_KEY) || ''; return /^[0-9a-f-]{36}$/.test(v) ? v : ''; } catch (x) { return ''; } };
+
+// Итог операции → честный текст. kind: ok | taken | running | unknown | failed | off | error
+function nbOutcome(code, d) {
+  d = d || {};
+  if (code === 'BOOKED') {
+    // Итог операции + АКТУАЛЬНОЕ состояние записи в календаре (сервер читает его при каждом запросе статуса).
+    const no = 'Номер ' + esc(d.booking_id || '') + '.';
+    const j = d.journal === 'queued' ? ' Журнал Google Sheets был недоступен: строка поставлена в очередь и появится в журнале автоматически.'
+      : d.journal === 'recovery' ? ' Строка журнала появится после автоматического восстановления (до 4 часов).' : '';
+    if (d.booking_state === 'anomaly') return { kind: 'warn', title: 'Требует проверки', text: no + ' Запись, отменённая ранее в календаре, была восстановлена системой и не была отменена обратно автоматически. Проверьте расписание и при необходимости отмените её в календаре.' };
+    if (d.booking_state === 'cancelled') return { kind: 'warn', title: 'Запись была создана, но сейчас отменена', text: no + ' В календаре эта запись отменена. Повторное подтверждение её не восстановит — при необходимости создайте новую запись.' };
+    if (d.booking_state === 'changed') return { kind: 'ok', title: 'Запись создана и потом перенесена', text: no + ' Сейчас в календаре: ' + esc(isDate(d.current_date) ? human(d.current_date) : '') + ', ' + esc(isTime(d.current_time) ? d.current_time : '') + '.' + j };
+    if (d.booking_state === 'unknown') return { kind: 'warn', title: 'Запись создана', text: no + ' Проверить её текущее состояние в календаре сейчас не удалось.' + j };
+    return { kind: 'ok', title: 'Запись создана', text: no + (j ? j + ' В календаре запись уже есть.' : '') };
+  }
+  if (code === 'BOOKING_NOT_ACTIVE' && d.anomaly === 'reclaim_reverted') return { kind: 'warn', title: 'Запись не создана повторно', text: 'Эта запись ранее была отменена в календаре. Повторное подтверждение пыталось её восстановить — система сразу вернула отмену. Если запись нужна, создайте новую.' };
+  if (code === 'BOOKING_NOT_ACTIVE') return { kind: 'warn', title: 'Запись не действует', text: 'Событие этой операции в календаре отменено (владельцем или потому что время раньше заняла другая запись). Эта операция повторно не выполняется — при необходимости создайте новую запись.' };
+  if (code === 'SLOT_TAKEN') return { kind: 'taken', title: 'Время уже занято', text: 'Пока вы проверяли запись, это время заняли. Запись не создана. Выберите другое время.' };
+  if (code === 'OP_IN_PROGRESS') return { kind: 'running', title: 'Операция выполняется', text: 'Запись создаётся. Не нажимайте «Подтвердить» снова — страница сама проверит результат.' };
+  if (code === 'NEEDS_REVIEW') return { kind: 'warn', title: 'Требует проверки', text: 'Не удалось достоверно установить, создана ли запись' + (d.booking_id ? ' (' + esc(d.booking_id) + ')' : '') + '. Повтор этой операции заблокирован, чтобы не создать запись вслепую. Проверьте расписание: если записи нет — создайте новую.' };
+  if (code === 'BOOKING_UNCERTAIN' || code === 'UNKNOWN' || /^OP_CONFLICT/.test(code || '') || code === 'LOCK_FOREIGN')
+    return { kind: 'unknown', title: 'Результат неизвестен', text: 'Сервер не смог подтвердить, создана ли запись. Не создавайте её заново: проверьте расписание или нажмите «Проверить результат». Повтор вслепую не выполняется.'
+      + ' Повтор этой операции заблокирован.' };
+  if (['CALENDAR_UNAVAILABLE', 'CALENDAR_WRITE_FAILED', 'NOT_CREATED', 'CLAIM_TOO_OLD'].includes(code)) return { kind: 'failed', title: 'Запись не создана', text: 'Календарь не ответил, запись не создана. Можно повторить — повтор не создаст вторую запись.' };
+  if (code === 'WRITES_DISABLED') return { kind: 'off', title: 'Создание записей пока отключено', text: 'Все проверки пройдены, но запись не создана: создание из панели ещё не включено.' };
+  if (code === 'OP_NOT_EXECUTED') return { kind: 'error', title: 'Запись не создана', text: 'Подтверждение не дошло до сервера. Данные формы после перезагрузки не сохраняются — заполните запись заново.' };
+  const E2 = { OP_PAYLOAD_MISMATCH: 'Данные записи изменились после проверки. Проверьте запись заново.', PROPOSAL_EXPIRED: 'Проверка устарела (больше 10 минут). Проверьте запись заново.', OP_ALREADY_FINALIZED: 'Эта операция уже завершена. Для новой записи начните заново.', OP_NOT_FOUND: 'Операция не найдена.', OPS_STORE_UNAVAILABLE: 'Сервер не смог сохранить операцию. Запись не создана.', NETWORK: 'Нет связи с сервером.' };
+  return { kind: 'error', title: 'Ошибка', text: E2[code] || ERR[code] || ('Код: ' + esc(code || 'неизвестно')) };
+}
+
+async function nbLoadSvcs() {
+  if (svcs) return;
+  try { const r = await api({ op: 'bootstrap', date: tzToday() }); svcs = (r.services || []).filter((x) => x && x.id && !x.manual); } catch (e) { svcs = null; }
+  if (!svcs || !svcs.length) svcs = SVC_FALLBACK;
+}
+function fld(id, label, html, f) { const e = nb.errs[id]; return `<div class="fld"><label for="nb_${id}">${label}</label>${html}${e ? `<span class="err" id="nb_${id}_e">${esc(e)}</span>` : ''}</div>`; }
+const inp = (id, type, extra) => `<input id="nb_${id}" type="${type}" value="${esc(nb.f[id])}" ${nb.errs[id] ? `aria-invalid="true" aria-describedby="nb_${id}_e"` : ''} ${extra || ''}>`;
+
+function rNew() {
+  if (!nb) { nb = nbNew(); const op = savedOp(); if (op) { nb.step = 'result'; nb.res = { code: 'OP_IN_PROGRESS', d: { op_id: op } }; nb.resumed = true; nbPoll(op, 0); } }
+  hdr('Новая запись', 'Демо-календарь проекта · по правилам голосового ИИ', '', true);
+  const m = $('#main');
+  if (nb.step === 'form') {
+    if (!svcs) { m.innerHTML = '<p class="mut">Загружаю список работ…</p>'; nbLoadSvcs().then(rerender, rerender); return; }
+    const f = nb.f;
+    m.innerHTML = `<form id="nbform" novalidate>
+      ${fld('service_id', 'Работа', `<select id="nb_service_id"><option value="">— выберите —</option>${svcs.map((x) => `<option value="${esc(x.id)}"${x.id === f.service_id ? ' selected' : ''}>${esc(x.name_ru)}${x.duration_min ? ' · ' + esc(x.duration_min) + ' мин' : ''}</option>`).join('')}</select>`)}
+      ${fld('date', 'Дата', inp('date', 'date', `min="${tzToday()}" max="${add(tzToday(), 60)}"`))}
+      <div class="fld"><label>Время</label><div id="nb_times">${nbTimesHTML()}</div>${nb.errs.time ? `<span class="err">${esc(nb.errs.time)}</span>` : ''}</div>
+      ${fld('customer_name', 'Имя клиента', inp('customer_name', 'text', 'maxlength="80" autocomplete="off"'))}
+      ${fld('phone', 'Телефон', inp('phone', 'tel', 'maxlength="40" inputmode="tel" placeholder="2xxxxxxx" autocomplete="off"'))}
+      <div class="row2">${fld('car_make', 'Марка', inp('car_make', 'text', 'maxlength="40" autocomplete="off"'))}${fld('car_model', 'Модель', inp('car_model', 'text', 'maxlength="40" autocomplete="off"'))}</div>
+      ${fld('notes', 'Примечание', `<textarea id="nb_notes" maxlength="500">${esc(f.notes)}</textarea>`)}
+      <button class="btn pri big" id="nbcheck" type="submit"${nb.busy ? ' disabled' : ''}>${nb.busy ? 'Проверяю…' : 'Проверить запись'}</button>
+      <div id="nbmsg">${nb.msg ? `<div class="note bad" style="margin-top:10px">${nb.msg}</div>` : ''}</div></form>`;
+    const sync = () => ['service_id', 'date', 'customer_name', 'phone', 'car_make', 'car_model', 'notes'].forEach((k) => { const el = $('#nb_' + k); if (el) f[k] = el.value; });
+    const reload = () => { sync(); f.time = ''; nb.times = null; nbTimes(); };
+    $('#nb_service_id').onchange = reload; $('#nb_date').onchange = reload;
+    $('#nb_times').onclick = (e) => { const c = e.target.closest('[data-t]'); if (!c) return; sync(); f.time = c.dataset.t; delete nb.errs.time; $('#nb_times').innerHTML = nbTimesHTML(); };
+    $('#nbform').onsubmit = (e) => { e.preventDefault(); sync(); nbPrepare(); };
+    return;
+  }
+  if (nb.step === 'check') {
+    const p = nb.prep.preview || {};
+    m.innerHTML = `<div class="card"><h3>Проверьте запись</h3><dl class="kv">
+      <dt>Работа</dt><dd>${esc(p.service_name)}</dd><dt>Когда</dt><dd>${esc(p.date_human || human(p.date))}, ${esc(p.time)}–${esc(p.time_end)}</dd>
+      <dt>Клиент</dt><dd>${esc(p.customer_name)}</dd><dt>Телефон</dt><dd>${esc(p.phone_masked)}</dd><dt>Машина</dt><dd>${esc(p.car)}</dd>
+      ${nb.f.notes ? `<dt>Примечание</dt><dd>${esc(nb.f.notes)}</dd>` : ''}</dl>
+      <p class="small">Данные проверены сервером. Номер будущей записи: ${esc(nb.prep.booking_id_preview)}. Проверка действует 10 минут.</p>
+      ${(nb.prep.warnings || []).includes('DUPLICATE_RECENT') ? `<div class="note warn">Такая же запись недавно уже создана (${esc(nb.prep.recent_booking_id)}). Подтверждайте, только если нужна ещё одна.</div>` : ''}
+      ${nb.prep.writes_enabled === false ? '<div class="note warn">Создание записей из панели пока отключено: «Подтвердить» только проверит данные.</div>' : ''}
+      <button class="btn pri big" id="nbok"${nb.busy ? ' disabled' : ''}>${nb.busy ? 'Создаю…' : 'Подтвердить'}</button>
+      <p><button class="btn" id="nbedit"${nb.busy ? ' disabled' : ''}>Изменить</button></p></div>`;
+    $('#nbok').onclick = nbCommit;
+    $('#nbedit').onclick = () => { nb.step = 'form'; nb.prep = null; render(); };
+    return;
+  }
+  // result
+  const o = nbOutcome(nb.res.code, nb.res.d), d = nb.res.d || {};
+  const cls = { ok: 'good', warn: 'warn', taken: 'warn', running: 'warn', unknown: 'warn', failed: 'bad', off: 'warn', error: 'bad' }[o.kind];
+  const alt = o.kind === 'taken' ? (d.available_times || []).filter(isTime) : [];
+  m.innerHTML = `<div class="note ${cls}" role="status"><h3 style="margin:0 0 6px">${o.title}</h3><p style="margin:0">${o.text}</p></div>
+    ${nb.resumed && o.kind === 'running' ? '<p class="small">После перезагрузки страницы проверяю незавершённую операцию.</p>' : ''}
+    ${alt.length ? `<p>Свободно в этот день:</p><div class="chips">${alt.map((t) => `<button class="chip" data-alt="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
+    ${o.kind === 'failed' && nb.prep ? '<button class="btn big" id="nbretry">Повторить</button>' : ''}
+    ${o.kind === 'unknown' || o.kind === 'running' ? '<button class="btn big" id="nbstatus">Проверить результат</button>' : ''}
+    ${(o.kind === 'ok' || o.kind === 'warn') && d.op_id ? '<button class="btn" id="nbstatus">Проверить текущий статус записи</button>' : ''}
+    <p><button class="btn" id="nbnew">Новая запись</button> <button class="btn" data-tab="schedule">К расписанию</button></p>`;
+  const q = (s) => $(s);
+  if (q('#nbretry')) q('#nbretry').onclick = () => { nb.step = 'check'; nbCommit(); };
+  if (q('#nbstatus')) q('#nbstatus').onclick = () => nbPoll(d.op_id || (nb.prep && nb.prep.op_id), 0, true);
+  q('#nbnew').onclick = () => { if (o.kind === 'running') return; saveOp(''); nb = nbNew(); render(); };
+  m.querySelectorAll('[data-alt]').forEach((b) => (b.onclick = () => { const keep = nb.f; nb = nbNew(); nb.f = Object.assign(keep, { time: b.dataset.alt }); saveOp(''); render(); nbTimes(); }));
+}
+function nbTimesHTML() {
+  if (!nb.f.service_id || !isDate(nb.f.date)) return '<p class="small" style="margin:0">Сначала выберите работу и дату.</p>';
+  if (!nb.times) return '<p class="mut" style="margin:0">Проверяю свободное время…</p>';
+  if (nb.times.error) return `<div class="note bad">${errText(nb.times.error)}</div>`;
+  if (nb.times.closed) return '<p style="margin:0">В этот день сервис закрыт.</p>';
+  if (!nb.times.list.length) return '<p style="margin:0">Свободного времени нет.</p>';
+  return `<div class="chips">${nb.times.list.map((t) => `<button type="button" class="chip" data-t="${esc(t)}" aria-pressed="${t === nb.f.time}">${esc(t)}</button>`).join('')}</div>`;
+}
+async function nbTimes() {
+  const f = nb.f, my = ++nbSeq, box = () => $('#nb_times');
+  if (box()) box().innerHTML = nbTimesHTML();
+  if (!f.service_id || !isDate(f.date)) return;
+  try { const r = await api({ op: 'free', date: f.date, service_id: f.service_id }); if (my !== nbSeq) return; nb.times = { list: (r.all_times || []).filter(isTime), closed: r.result === 'CLOSED_DAY' }; }
+  catch (e) { if (my !== nbSeq || e.code === 'STALE') return; nb.times = { error: e }; }
+  if (nb.times.list && f.time && !nb.times.list.includes(f.time)) f.time = '';
+  if (box()) box().innerHTML = nbTimesHTML();
+}
+async function nbPrepare() {
+  if (nb.busy) return;
+  nb.errs = nbValidate(nb.f); nb.msg = '';
+  if (Object.keys(nb.errs).length) { render(); const first = $('[aria-invalid="true"]'); if (first) first.focus(); return; }
+  nb.busy = true; render();
+  try { const r = await api({ op: 'prepare_create', booking: nbBooking(nb.f) }); nb.prep = r; nb.step = 'check'; }
+  catch (e) {
+    if (e.code === 'STALE') return;
+    if (e.code === 'SLOT_TAKEN') { nb.errs.time = 'Это время уже занято — выберите другое'; nb.f.time = ''; nb.times = null; setTimeout(nbTimes); }
+    else { const fe = { INVALID_PHONE: 'phone', MISSING_FIELDS: 'customer_name', CLOSED_DAY: 'date', DATE_IN_PAST: 'date', TOO_FAR_AHEAD: 'date', OUTSIDE_HOURS: 'time', TOO_SOON: 'time', NEEDS_MANUAL_CONFIRMATION: 'service_id' }[e.code];
+      if (fe) nb.errs[fe] = 'Сервер не принял: ' + (nbOutcome(e.code).text.replace(/^Код: /, '')); else nb.msg = nbOutcome(e.code).text; }
+  } finally { nb.busy = false; if (tab === 'new') render(); }
+}
+async function nbCommit() {
+  if (nb.busy || !nb.prep) return; // повторное нажатие во время запроса ничего не отправляет
+  nb.busy = true; saveOp(nb.prep.op_id); render();
+  let code, d;
+  try { d = await api({ op: 'commit', op_id: nb.prep.op_id, payload_hash: nb.prep.payload_hash, booking: nbBooking(nb.f) }); code = d.result || 'UNKNOWN'; }
+  catch (e) { if (e.code === 'STALE') return; code = e.code; d = e.data || {}; if (e.code === 'NETWORK' || e.code === 'BAD_RESPONSE' || /^HTTP_5/.test(e.code)) code = 'BOOKING_UNCERTAIN'; }
+  nb.busy = false; nb.step = 'result'; nb.res = { code, d: Object.assign({ op_id: nb.prep.op_id }, d) };
+  if (!['OP_IN_PROGRESS', 'BOOKING_UNCERTAIN'].includes(code) && code !== 'CALENDAR_UNAVAILABLE' && code !== 'CALENDAR_WRITE_FAILED') saveOp('');
+  if (tab === 'new') render();
+  if (code === 'OP_IN_PROGRESS' || code === 'BOOKING_UNCERTAIN') nbPoll(nb.prep.op_id, 0);
+}
+// Проверка итога по op_status: до 40 раз раз в 3 с. Сервер сам сверяет с календарём зависшую операцию.
+async function nbPoll(opId, n, manual) {
+  if (!opId || !nb) return;
+  let code, d;
+  try { d = await api({ op: 'op_status', op_id: opId }); code = d.result || (d.status === 'prepared' ? 'NOT_EXECUTED' : 'UNKNOWN'); }
+  catch (e) { if (e.code === 'STALE') return; code = e.code; d = e.data || {}; if (code === 'NETWORK') code = nb.res ? nb.res.code : 'BOOKING_UNCERTAIN'; }
+  if (!nb || !nb.res || (nb.res.d && nb.res.d.op_id && nb.res.d.op_id !== opId)) return;
+  if (code === 'NOT_EXECUTED') code = 'OP_NOT_EXECUTED';
+  nb.res = { code, d: Object.assign({ op_id: opId }, d) };
+  if (code !== 'OP_IN_PROGRESS' && code !== 'BOOKING_UNCERTAIN') saveOp('');
+  if (tab === 'new') render();
+  if ((code === 'OP_IN_PROGRESS') && n < 40) setTimeout(() => nbPoll(opId, n + 1), 3000);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (!token && !b.closest('#login')) return; // без входа панель не рисуется
+  if (b.dataset.tab) { tab = b.dataset.tab; render(); return; } // загрузку журнала запускает rRequests, один запрос
+  if (b.dataset.go) { if (isDate(b.dataset.go)) { cur = b.dataset.go; view = 'day'; render(); } return; }
+  const go = (d) => { cur = d; render(); }; // загрузку недели запускает rSchedule, один запрос
+  switch (b.id) {
+    case 'prev': return go(view === 'day' ? add(cur, -1) : add(weekStart(cur), -7));
+    case 'next': return go(view === 'day' ? add(cur, 1) : add(weekStart(cur), 7));
+    case 'tod': return go(tzToday());
+    case 'vd': view = 'day'; return render();
+    case 'vw': view = 'week'; return render();
+    // Повторное нажатие, пока загрузка идёт, второй запрос не отправляет.
+    case 'refresh': case 'wretry': { const ws = weekStart(cur); if (inflight['w:' + ws]) return; delete weeks[ws]; return go(cur); }
+    case 'rrefresh': case 'rretry': if (inflight.r) return; reqs = null; return render();
+    case 'logout': try { sessionStorage.removeItem(NB_KEY); } catch (x) {} nb = null; clearSession(); try { google.accounts.id.disableAutoSelect(); } catch (x) {} $('#login').hidden = false; $('#lmsg').innerHTML = '<p class="mut">Вы вышли.</p>'; return;
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !token) return;
+  const w = weeks[weekStart(cur)];
+  if (w && !w.loading && Date.now() - w.at > FRESH) { loadWeek(weekStart(cur), true).then(rerender, rerender); loadRequests(true); }
+});
+initGoogle();
+}
+</script>
+</body>
+</html>
