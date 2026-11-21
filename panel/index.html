@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Ii45Mrv+EcU6uJIICzmxbitcFJWAkKodPvFfSgovTcQ=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="robots" content="noindex,nofollow">
 <title>Панель автосервиса</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,7 +120,7 @@ code{font-size:14px;background:var(--panel);padding:2px 6px;border-radius:6px;ov
 <script>
 {
 // ===== НАСТРОЙКИ (не секреты) =====
-const CLIENT_ID = '';
+const CLIENT_ID = '156627881891-q50bqubjoaf3v3lpkhhtpgo4pc2fu2jj.apps.googleusercontent.com';
 const API = 'https://autoreception.app.n8n.cloud/webhook/autoreception/panel-api';
 const PROTOTYPE = 'https://claude.ai/artifact/EC3x2YduHiHBBCUMaydvR7';
 // ==================================
@@ -137,7 +138,7 @@ const human = (s) => { const d = parse(s); return d.getUTCDate() + ' ' + MON[d.g
 const weekStart = (s) => { let d = s; while (dow(d) !== 1) d = add(d, -1); return d; };
 
 // Токен Google хранится только в памяти страницы (не в localStorage/cookie).
-let token = null, tokenExp = 0, me = null;
+let token = null, tokenExp = 0, me = null, bodyType = 'text';
 let tab = 'schedule', view = 'day', cur = tzToday();
 const weeks = {};       // кэш: начало недели -> { at, data | error }
 let reqs = null;         // { at, data | error }
@@ -147,13 +148,19 @@ function b64json(part) { try { return JSON.parse(decodeURIComponent(escape(atob(
 
 async function api(body) {
   if (!token || Date.now() / 1000 > tokenExp - 30) { expire(); throw { code: 'TOKEN_EXPIRED' }; }
-  let res;
-  try {
-    // text/plain — простой запрос без предварительного CORS-запроса; токен в теле, не в адресе.
-    res = await fetch(API, { method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(Object.assign({ id_token: token }, body)) });
-  } catch (e) { throw { code: 'NETWORK' }; }
-  let data = null;
-  try { data = await res.json(); } catch (e) { throw { code: 'BAD_RESPONSE', http: res.status }; }
+  // Токен — в теле POST, не в адресе. Сначала text/plain (без предварительного CORS-запроса);
+  // если сервер не разобрал тело (NO_TOKEN при отправленном токене) или браузер отказал — один повтор как JSON.
+  const send = (ct) => fetch(API, { method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { 'Content-Type': ct }, body: JSON.stringify(Object.assign({ id_token: token }, body)) });
+  let res = null, data = null;
+  for (const ct of bodyType === 'json' ? ['application/json'] : ['text/plain;charset=UTF-8', 'application/json']) {
+    try { res = await send(ct); } catch (e) { res = null; continue; }
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (data && data.error_code === 'NO_TOKEN' && ct.startsWith('text/')) continue;
+    if (ct === 'application/json') bodyType = 'json';
+    break;
+  }
+  if (!res) throw { code: 'NETWORK' };
+  if (!data) throw { code: 'BAD_RESPONSE', http: res.status };
   if (!res.ok || !data || data.ok === false) {
     const err = { code: (data && data.error_code) || 'HTTP_' + res.status, http: res.status, whoami: data && data.whoami };
     if (err.code === 'TOKEN_EXPIRED' || err.http === 401) expire(err);
@@ -164,7 +171,7 @@ async function api(body) {
 }
 
 const ERR = {
-  NETWORK: 'Нет связи с сервером. Проверьте интернет и нажмите «Обновить».',
+  NETWORK: 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
   BAD_RESPONSE: 'Сервер ответил непонятно. Ничего не показано, чтобы не ввести в заблуждение.',
   CALENDAR_UNAVAILABLE: 'Календарь сейчас недоступен. Расписание не показано.',
   SHEETS_UNAVAILABLE: 'Журнал заявок сейчас недоступен.',
@@ -182,7 +189,14 @@ function onCredential(resp) {
   if (!t || !p) { $('#lmsg').innerHTML = '<div class="note bad">Google не вернул данные входа.</div>'; return; }
   token = t; tokenExp = Number(p.exp) || 0; me = { email: p.email || '', name: p.name || '' };
   $('#lmsg').innerHTML = '<p class="mut">Проверяю доступ…</p>';
-  loadWeek(weekStart(cur), true).then(() => {
+  loadWeek(weekStart(cur), true).then((w) => {
+    const e = w && w.error;
+    // Не удалось связаться или проверить вход — остаёмся на экране входа. Календарь недоступен — вход подтверждён, открываем.
+    if (e && (['NETWORK', 'BAD_RESPONSE', 'AUTH_CHECK_UNAVAILABLE', 'AUTH_NOT_CONFIGURED'].includes(e.code) || /^HTTP_/.test(e.code))) {
+      $('#lmsg').innerHTML = '<div class="note bad">' + errText(e) + '</div><button class="btn" id="retry">Повторить</button>';
+      $('#retry').onclick = () => onCredential({ credential: t });
+      return;
+    }
     $('#login').hidden = true;
     loadRequests(true);
     render();
