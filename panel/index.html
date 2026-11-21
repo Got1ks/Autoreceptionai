@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UAzc7ec//G+3Fw49qR2aXJTKnV7AqWg0R2PPcxW6kgs=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-p0RxZddNcrdkynpNbLdKaif6E3T4I4bRhix4Cp36gXc=' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src data: https://*.googleusercontent.com https://*.gstatic.com; connect-src https://autoreception.app.n8n.cloud https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="robots" content="noindex,nofollow">
 <title>Панель автосервиса</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -135,6 +135,15 @@ const dow = (s) => parse(s).getUTCDay();
 const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'], WDF = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 const MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const human = (s) => { const d = parse(s); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; };
+const nowHM = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Riga', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+// Состояние дня для подписи: прошёл / закрыт / рабочее время закончилось / идёт / впереди.
+function dayState(day, date) {
+  const t = tzToday();
+  if (date < t) return 'past';
+  if (!day || !day.open) return 'closed';
+  if (date === t) { const n = nowHM(); if (n >= day.close) return 'over'; if (n >= day.open) return 'now'; }
+  return 'ahead';
+}
 const weekStart = (s) => { let d = s; while (dow(d) !== 1) d = add(d, -1); return d; };
 
 // Токен Google хранится только в памяти страницы (не в localStorage/cookie).
@@ -289,7 +298,10 @@ function hdr(title, sub, extra) {
 }
 function render() {
   document.querySelectorAll('nav button[data-tab]').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
-  const n = reqs && reqs.data ? Math.max(0, Number(reqs.data.count) || 0) : 0; const bd = $('#rqb'); bd.hidden = !n; bd.textContent = String(n);
+  // Журнал недоступен — количество неизвестно: показываем «?», а не ноль.
+  const bd = $('#rqb');
+  if (reqs && reqs.error) { bd.hidden = false; bd.textContent = '?'; bd.title = 'Журнал недоступен — число заявок неизвестно'; }
+  else { const n = reqs && reqs.data ? Math.max(0, Number(reqs.data.count) || 0) : 0; bd.hidden = !n; bd.textContent = String(n); bd.title = n ? 'Открытых заявок: ' + n : ''; }
   ({ schedule: rSchedule, requests: rRequests, clients: rClients, chat: rChat, more: rMore })[tab]();
 }
 
@@ -327,9 +339,21 @@ function rSchedule() {
   if (view === 'day') {
     const day = (d.days || []).find((x) => x.date === cur);
     const evs = (d.events || []).filter((e) => e.date === cur);
-    html += `<p class="mut" style="margin:0 0 10px">${day && day.open ? 'Открыто ' + esc(day.open) + '–' + esc(day.close) : 'Выходной'} · записей ${evs.filter((e) => e.kind === 'booking').length}${evs.some((e) => e.kind !== 'booking') ? ' · другие события ' + evs.filter((e) => e.kind !== 'booking').length : ''}</p>`;
-    html += evs.length ? `<div class="day">${evs.map(jobHTML).join('')}</div>` : `<div class="empty"><h3>Записей нет</h3><p class="mut">${day && day.open ? 'Весь день свободен.' : 'Сервис в этот день закрыт.'}</p></div>`;
-    if (day && day.open) html += `<div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Свободное время</h3><p class="small" style="margin-top:0">По тем же правилам, что у голосового ИИ: один пост, буфер 15 минут, не раньше чем через час.</p><div class="row2"><div class="fld"><label for="fsvc">Работа</label><select id="fsvc"><option value="oil_change">Замена масла</option><option value="tire_change_set">Шиномонтаж</option><option value="brake_pads">Тормозные колодки</option><option value="computer_diagnostics">Диагностика</option></select></div><div class="fld"><label>&nbsp;</label><button class="btn" id="ffind">Показать</button></div></div><div id="fres"></div></div>`;
+    const st = dayState(day, cur), hrs = day && day.open ? esc(day.open) + '–' + esc(day.close) : '';
+    const nb = evs.filter((e) => e.kind === 'booking').length, no = evs.length - nb;
+    const hoursLine = { past: hrs ? 'Работали ' + hrs : 'Выходной', closed: 'Выходной', over: 'Работали ' + hrs + ' · рабочий день закончился', now: 'Открыто ' + hrs + ' · идёт рабочий день', ahead: 'Открыто ' + hrs }[st];
+    html += `<p class="mut" style="margin:0 0 10px">${hoursLine} · записей ${nb}${no ? ' · другие события ' + no : ''}</p>`;
+    // «Записей нет» не означает «можно записать»: возможность записи зависит от времени, длительности работы и правил.
+    const emptyText = {
+      past: 'Этот день уже прошёл.',
+      closed: 'Сервис в этот день закрыт — записать нельзя.',
+      over: 'Рабочий день закончился в ' + esc(day && day.close) + '. На сегодня записать уже нельзя.',
+      now: 'Это не значит, что можно записать на любое время: запись не раньше чем через час и с учётом длительности работы. Точные варианты — в «Свободном времени» ниже.',
+      ahead: 'Можно ли записать нового клиента и на какое время, зависит от работы — проверьте «Свободное время» ниже.',
+    }[st];
+    html += evs.length ? `<div class="day">${evs.map(jobHTML).join('')}</div>` : `<div class="empty"><h3>${st === 'past' ? 'Записей не было' : 'Записей нет'}</h3><p class="mut">${emptyText}</p></div>`;
+    if (evs.length && st === 'over') html += '<p class="small">Рабочий день закончился — на сегодня записать уже нельзя.</p>';
+    if (st === 'now' || st === 'ahead') html += `<div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Свободное время</h3><p class="small" style="margin-top:0">По тем же правилам, что у голосового ИИ: один пост, буфер 15 минут, не раньше чем через час.</p><div class="row2"><div class="fld"><label for="fsvc">Работа</label><select id="fsvc"><option value="oil_change">Замена масла</option><option value="tire_change_set">Шиномонтаж</option><option value="brake_pads">Тормозные колодки</option><option value="computer_diagnostics">Диагностика</option></select></div><div class="fld"><label>&nbsp;</label><button class="btn" id="ffind">Показать</button></div></div><div id="fres"></div></div>`;
   } else {
     html += '<div class="week">' + (d.days || []).filter((x) => x && isDate(x.date)).map((x) => {
       const evs = (d.events || []).filter((e) => e.date === x.date), b = evs.filter((e) => e.kind === 'booking').length;
@@ -357,7 +381,7 @@ const RT = { timing_belt: 'ГРМ, нужна оценка', other: 'Друга�
 function rRequests() {
   hdr('Заявки', 'Открытые обращения из журнала', '<button class="btn" id="rrefresh">Обновить</button>');
   if (!reqs) { $('#main').innerHTML = '<p class="mut">Загружаю…</p>'; loadRequests(); return; }
-  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)}</div><button class="btn" id="rretry">Попробовать ещё раз</button>`; return; }
+  if (reqs.error) { $('#main').innerHTML = `<div class="note bad">${errText(reqs.error)} Сколько сейчас открытых заявок — неизвестно; это не значит, что их нет.</div><button class="btn" id="rretry">Попробовать ещё раз</button>`; return; }
   const l = reqs.data.requests || [];
   $('#main').innerHTML = (l.length ? `<div class="list">${l.map((q) => `<div class="card"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><h3>${esc(RT[q.kind] || q.service_name || q.kind)}</h3><span class="tag voice">Голос ${esc((q.lang || '').toUpperCase())}</span><span class="small">${esc(q.created_at)}</span></div><p><b>${esc(q.customer_name)}</b> · <span style="white-space:nowrap">${esc(q.phone)}</span>${q.car ? ' · ' + esc(q.car) : ''}</p>${q.notes ? `<p>${esc(q.notes)}</p>` : ''}${q.wanted_date ? `<p class="small">Желаемо: ${esc(q.wanted_date)} ${esc(q.wanted_time)}</p>` : ''}<p class="small">Статус: ${esc(q.status)}</p></div>`).join('')}</div>` : '<div class="empty"><h3>Открытых заявок нет</h3></div>') +
     '<p class="small">Закрыть заявку или записать клиента из панели можно будет на этапе B.</p>';
